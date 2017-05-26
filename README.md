@@ -1,5 +1,5 @@
 # jexpress
-A light express.js like framwork written in Java (in one file)
+A light express.js like framework written in Java (in one file)
 
 - Compile the application with
   ```
@@ -19,5 +19,5 @@ A light express.js like framwork written in Java (in one file)
   javadoc -d ../doc JExpress.java
   ```
   
- The [https://raw.githubusercontent.com/forax/jexpress/doc/index.html](actual documentation).
+ The (actual documentation)[https://raw.githubusercontent.com/forax/jexpress/blob/master/doc/index.html].
  
