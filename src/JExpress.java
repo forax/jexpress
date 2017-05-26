@@ -24,7 +24,7 @@ import com.sun.net.httpserver.HttpServer;
  * 
  * Compile the application with : javac JExpress.java
  * Run the application with     : java JExpress
- * Get the documentation with   : javadoc JExpress.java
+ * Get the documentation with   : javadoc -d ../doc JExpress.java
  */
 @SuppressWarnings("restriction")
 public class JExpress {
@@ -92,6 +92,7 @@ public class JExpress {
     
     /**
      * Set the HTTP status of the response
+     * @param status the HTTP status (200, 404, etc)
      * @return the current response.
      */
     default Response status(int status) {
