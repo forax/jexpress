@@ -1,6 +1,21 @@
 # jexpress
 A light express.js like framework written in Java (in one file)
 
+- Example
+  ```java
+  public static void main(String[] args) throws IOException {
+
+    JExpress app = express();
+
+    app.get("/foo/:id", (req, res) -> {
+      String id = req.param("id");
+      res.send("<html><p>id =" + id +"</p></html>");
+    });
+
+    app.listen(3000);
+  }
+  ```
+
 - Compile the application with
   ```
   cd src
