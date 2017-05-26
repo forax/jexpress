@@ -19,5 +19,5 @@ A light express.js like framework written in Java (in one file)
   javadoc -d ../doc JExpress.java
   ```
   
- The (actual documentation)[https://raw.githubusercontent.com/forax/jexpress/blob/master/doc/index.html].
+ The documentation with rawgit [https://rawgit.com/forax/jexpress/master/doc/index.html].
  
