@@ -6,12 +6,14 @@ methods on JExpress: [express()](https://rawgit.com/forax/jexpress/master/doc/JE
                      [post(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#post-java.lang.String-JExpress.Callback-),
                      [put(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#put-java.lang.String-JExpress.Callback-),
                      [delete(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#delete-java.lang.String-JExpress.Callback-) and
-                     [listen()port](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#listen-int-)
+                     [listen(port)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#listen-int-)
+                     
 methods on Request: [body()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#body--),
                     [bodyText()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#bodyText--),
                     [method()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#method--),
                     [param(name)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#param-java.lang.String-),
                     [path()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#path--)
+                    
 methods on Response: [status(status)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#status-int-),
                      [type(type)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#type-java.lang.String-),
                      [set(field, value)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#set-java.lang.String-java.lang.String-),
