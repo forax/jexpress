@@ -1,7 +1,7 @@
 # jexpress
 A light [express.js](http://expressjs.com/) like framework written in Java (in one file)
 
-API: methods on
+## API: methods on
 - JExpress: [express()](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#express--),
             [get(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#get-java.lang.String-JExpress.Callback-),
             [post(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#post-java.lang.String-JExpress.Callback-),
@@ -21,7 +21,7 @@ API: methods on
             [json(text)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
             [send(body)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#send-java.lang.String-)
 
-- Example
+## Example
   ```java
   public static void main(String[] args) throws IOException {
 
@@ -36,6 +36,7 @@ API: methods on
   }
   ```
 
+## Build
 - Compile the application with
   ```
   cd src
