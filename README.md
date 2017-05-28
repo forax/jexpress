@@ -1,5 +1,9 @@
 # jexpress
-A light express.js like framework written in Java (in one file)
+A light [http://expressjs.com/](express.js) like framework written in Java (in one file)
+
+methods on JExpress: [https://rawgit.com/forax/jexpress/master/doc/JExpress.html#express--]express(), get(), post(), put(), delete() and listen()
+methods on Request: body(), method(), param(), path()
+methods on Response: status(), type(), set(), append(), json(), send()
 
 - Example
   ```java
