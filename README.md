@@ -1,7 +1,7 @@
 # jexpress
 A light [express.js](http://expressjs.com/) like framework written in Java (in one file)
 
-## API: methods on
+## API
 - JExpress: [express()](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#express--),
             [get(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#get-java.lang.String-JExpress.Callback-),
             [post(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#post-java.lang.String-JExpress.Callback-),
@@ -20,6 +20,8 @@ A light [express.js](http://expressjs.com/) like framework written in Java (in o
             [json(stream)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.util.stream.Stream-),
             [json(text)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
             [send(body)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#send-java.lang.String-)
+
+The full [javadoc](https://rawgit.com/forax/jexpress/master/doc/index.html)
 
 ## Example
   ```java
@@ -54,6 +56,4 @@ A light [express.js](http://expressjs.com/) like framework written in Java (in o
   cd src
   javadoc -d ../doc JExpress.java
   ```
-  
- The documentation with rawgit [https://rawgit.com/forax/jexpress/master/doc/index.html].
  
