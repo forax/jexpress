@@ -379,6 +379,7 @@ public class JExpress {
     Function<String, Optional<Map<String, String>>> matcher = matcher(path);
     Pipeline stub = asPipeline(callback);
     this.pipeline = exchange -> {
+      exchange.setAttribute("status", null);
       Optional<Map<String,String>> paramsOpt = Optional.of(exchange)
           .filter(req -> exchange.getRequestMethod().equalsIgnoreCase(method))
           .flatMap(matcher.compose(_exchange -> _exchange.getRequestURI().getPath()));
