@@ -1,11 +1,10 @@
-import static java.util.stream.Collectors.joining;
 import static java.lang.System.out;
+import static java.util.stream.Collectors.joining;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,73 +31,83 @@ public class JExpress {
    * A HTTP request
    */
   public interface Request {
-    @Deprecated
-    HttpExchange exchange();
-    
     /**
      * The HTTP method of the request.
      * @return the HTTP method.
      */
-    default String method() {
-      return exchange().getRequestMethod().toUpperCase();
-    }
+    String method();
     
     /**
      * The HTTP path of the request.
      * @return the HTTP path.
      */
-    default String path() {
-      return exchange().getRequestURI().getPath();
-    }
+    String path();
     
     /**
      * Get named route parameter
      * @param name name of the parameter
      * @return the value of the parameter or ""
      */
-    @SuppressWarnings("unchecked")
-    default String param(String name) {
-      return ((Map<String, String>)exchange().getAttribute("params")).getOrDefault(name, "");
-    }
+    String param(String name);
     
     /**
      * Returns the body of the request
      * @return the body of the request
      */
-    default InputStream body() {
-      return exchange().getRequestBody();
-    }
+    InputStream body();
     
     /**
      * Returns the body of the request as a String.
      * @return the body of the request as a String.
      * @throws IOException if an I/O error occurs.
      */
-    default String bodyText() throws IOException {
-      try(InputStream in = exchange().getRequestBody();
-          InputStreamReader reader = new InputStreamReader(in);
-          BufferedReader buffered = new BufferedReader(reader)) {
-        return buffered.lines().collect(joining("\n"));
+    public String bodyText() throws IOException;
+  }
+  
+  private static Request request(HttpExchange exchange) {
+    return new Request() {
+      @Override
+      public String method() {
+        return exchange.getRequestMethod().toUpperCase();
       }
-    }
+      
+      @Override
+      public String path() {
+        return exchange.getRequestURI().getPath();
+      }
+      
+      @Override
+      @SuppressWarnings("unchecked")
+      public String param(String name) {
+        return ((Map<String, String>)exchange.getAttribute("params")).getOrDefault(name, "");
+      }
+      
+      @Override
+      public InputStream body() {
+        return exchange.getRequestBody();
+      }
+      
+      @Override
+      public String bodyText() throws IOException {
+        try(InputStream in = exchange.getRequestBody();
+            InputStreamReader reader = new InputStreamReader(in);
+            BufferedReader buffered = new BufferedReader(reader)) {
+          return buffered.lines().collect(joining("\n"));
+        }
+      }  
+    };
   }
   
   /**
    * A HTTP response
    */
   public interface Response {
-    @Deprecated
-    HttpExchange exchange();
-    
     /**
      * Set the HTTP status of the response
      * @param status the HTTP status (200, 404, etc)
      * @return the current response.
      */
-    default Response status(int status) {
-      exchange().setAttribute("status", status);
-      return this;
-    }
+    Response status(int status);
     
     /**
      * Appends the specified value to the HTTP response header field.
@@ -106,10 +115,7 @@ public class JExpress {
      * @param value the value of the header field
      * @return the current response.
      */
-    default Response append(String field, String value) {
-      exchange().getResponseHeaders().add(field, value);
-      return this;
-    }
+    Response append(String field, String value);
     
     /**
      * Sets the response’s HTTP header field to value
@@ -117,37 +123,28 @@ public class JExpress {
      * @param value the value of the header field
      * @return the current response.
      */
-    default Response set(String field, String value) {
-      exchange().getResponseHeaders().set(field, value);
-      return this;
-    }
+    Response set(String field, String value);
     
     /**
      * Sets the Content-Type HTTP header to the MIME type.
      * @param type the MIME type.
      * @return the current response.
      */
-    default Response type(String type) {
-      return set("Content-Type", type);
-    }
+    Response type(String type);
     
     /**
      * Sends a JSON response with the correct 'Content-Type'.
      * @param stream a stream of Object, toString will be called on each of them.
      * @throws IOException if an I/O error occurs.
      */
-    default void json(Stream<?> stream) throws IOException {
-      json(stream.map(Object::toString).collect(joining(", ", "[", "]")));
-    }
+    void json(Stream<?> stream) throws IOException;
     
     /**
      * Sends a JSON response with the correct 'Content-Type'.
      * @param json a JSON string
      * @throws IOException if an I/O error occurs.
      */
-    default void json(String json) throws IOException {
-      type("application/json");
-    }
+    void json(String json) throws IOException;
     
     /**
      * Send a Text response.
@@ -156,17 +153,58 @@ public class JExpress {
      * @param body the text of the response
      * @throws IOException if an I/O error occurs.
      */
-    default void send(String body) throws IOException {
-      byte[] content = body.getBytes("UTF8");
-      Integer statusAttr = (Integer)exchange().getAttribute("status");
-      int status = (statusAttr == null)? 200: statusAttr;
-      exchange().sendResponseHeaders(status, content.length);
-      Headers headers = exchange().getResponseHeaders();
-      if (!headers.containsKey("Content-Type")) {
-        type("text/html");
+    void send(String body) throws IOException;
+  }
+  
+  private static Response response(HttpExchange exchange) {
+    return new Response() {
+      @Override
+      public Response status(int status) {
+        exchange.setAttribute("status", status);
+        return this;
       }
-      exchange().getResponseBody().write(content);
-    }
+      
+      @Override
+      public Response append(String field, String value) {
+        exchange.getResponseHeaders().add(field, value);
+        return this;
+      }
+      
+      @Override
+      public Response set(String field, String value) {
+        exchange.getResponseHeaders().set(field, value);
+        return this;
+      }
+      
+      @Override
+      public Response type(String type) {
+        return set("Content-Type", type);
+      }
+      
+      @Override
+      public void json(Stream<?> stream) throws IOException {
+        json(stream.map(Object::toString).collect(joining(", ", "[", "]")));
+      }
+      
+      @Override
+      public void json(String json) throws IOException {
+        type("application/json");
+        send(json);
+      }
+      
+      @Override
+      public void send(String body) throws IOException {
+        byte[] content = body.getBytes("UTF8");
+        Integer statusAttr = (Integer)exchange.getAttribute("status");
+        int status = (statusAttr == null)? 200: statusAttr;
+        exchange.sendResponseHeaders(status, content.length);
+        Headers headers = exchange.getResponseHeaders();
+        if (!headers.containsKey("Content-Type")) {
+          type("text/html");
+        }
+        exchange.getResponseBody().write(content);
+      }
+    };
   }
   
   /**
@@ -182,16 +220,6 @@ public class JExpress {
      * @throws IOException if an I/O occurs
      */
     public void accept(Request request, Response response) throws IOException;
-  }
-  
-  private static BiConsumer<Request, Response> unchecked(Callback callback) {
-    return (request, response) -> {
-      try {
-        callback.accept(request, response);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-    };
   }
   
   private static Function<String, Optional<Map<String, String>>> matcher(String uri) {
@@ -237,11 +265,19 @@ public class JExpress {
     return new JExpress();
   }
   
-  private Callback callback = (request, response) -> {
-    System.err.println("no match " + request.method() + " " + request.path());
-    response.status(404).send("<html><h1>No Match</h1></html>");
-  };
+  interface Pipeline {
+    void accept(HttpExchange exchange) throws IOException;
+  }
   
+  private static Pipeline asPipeline(Callback callback) {
+    return exchange -> callback.accept(request(exchange), response(exchange));
+  }
+  
+  private Pipeline pipeline = asPipeline((request, response) -> {
+    String message = "no match " + request.method() + " " + request.path();
+    System.err.println(message);
+    response.status(404).send("<html><h2>" + message + "</h2></html>");
+  });
   
   /**
    * Routes an HTTP request if the HTTP method is GET.
@@ -284,25 +320,21 @@ public class JExpress {
   }
   
   private void method(String method, String path, Callback callback) {
-    Callback oldCallback = this.callback;
+    Pipeline oldPipeline = this.pipeline;
     Function<String, Optional<Map<String, String>>> matcher = matcher(path);
-    this.callback = (request, response) -> {
-      try {
-        //TODO avoid ifPresent/get when upgrade to Java 9
-        Optional<Map<String,String>> params = Optional.of(request)
-          .filter(req -> req.method().equalsIgnoreCase(method))
-          .flatMap(matcher.compose(Request::path));
-        if (params.isPresent()) {
-          request.exchange().setAttribute("params", params.get());
-          unchecked(callback).accept(request, response);
-        } else {
-          unchecked(oldCallback).accept(request, response);
-        }
-      } catch(UncheckedIOException e) {
-        throw e.getCause();
+    Pipeline stub = asPipeline(callback);
+    this.pipeline = exchange -> {
+      Optional<Map<String,String>> paramsOpt = Optional.of(exchange)
+          .filter(req -> exchange.getRequestMethod().equalsIgnoreCase(method))
+          .flatMap(matcher.compose(_exchange -> _exchange.getRequestURI().getPath()));
+      if (paramsOpt.isPresent()) {
+        exchange.setAttribute("params", paramsOpt.get());
+        stub.accept(exchange);
+      } else {
+        oldPipeline.accept(exchange);
       }
     };
-  }   
+  }
   
   /**
    * Starts a server on the given port and listen for connections.
@@ -312,7 +344,7 @@ public class JExpress {
   public void listen(int port) throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
     server.createContext("/", exchange -> {
-      callback.accept(() -> exchange, () -> exchange);
+      pipeline.accept(exchange);
       exchange.close();
     });
     server.setExecutor(null);
@@ -331,7 +363,7 @@ public class JExpress {
 
     app.get("/foo/:id", (req, res) -> {
       String id = req.param("id");
-      res.send("<html><p>id =" + id + "</p></html>");
+      res.json("{ \"id\":\"" + id + "\" }");
     });
 
     app.listen(3000);
