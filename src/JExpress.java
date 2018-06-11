@@ -2,10 +2,15 @@ import static java.lang.System.out;
 import static java.util.stream.Collectors.joining;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -133,6 +138,16 @@ public class JExpress {
     Response type(String type);
     
     /**
+     * Sets the Content-Type HTTP header and the charset encoding.
+     * @param type the MIME type.
+     * @param charset the charset encoding
+     * @return the current response.
+     */
+    default Response type(String type, String charset) {
+      return type(type + "; charset=" + charset);
+    }
+    
+    /**
      * Sends a JSON response with the correct 'Content-Type'.
      * @param stream a stream of Object, toString will be called on each of them.
      * @throws IOException if an I/O error occurs.
@@ -154,6 +169,14 @@ public class JExpress {
      * @throws IOException if an I/O error occurs.
      */
     void send(String body) throws IOException;
+    
+    /**
+     * Send a file as response.
+     * The status is set to 200 if the file is found or 404 if not found.
+     * @param path the path of the file;
+     * @throws IOException if an I/O error occurs.
+     */
+    void sendFile(Path path) throws IOException;
   }
   
   private static Response response(HttpExchange exchange) {
@@ -188,7 +211,7 @@ public class JExpress {
       
       @Override
       public void json(String json) throws IOException {
-        type("application/json");
+        type("application/json", "utf-8");
         send(json);
       }
       
@@ -200,9 +223,41 @@ public class JExpress {
         exchange.sendResponseHeaders(status, content.length);
         Headers headers = exchange.getResponseHeaders();
         if (!headers.containsKey("Content-Type")) {
-          type("text/html");
+          type("text/html", "utf-8");
         }
-        exchange.getResponseBody().write(content);
+        try(OutputStream output = exchange.getResponseBody()) {
+          output.write(content);
+        }
+      }
+      
+      @Override
+      public void sendFile(Path path) throws IOException {
+        try {
+          try(InputStream input = Files.newInputStream(path)) {
+            exchange.sendResponseHeaders(200, Files.size(path));
+            Headers headers = exchange.getResponseHeaders();
+            if (!headers.containsKey("Content-Type")) {
+              String contentType = Files.probeContentType(path);
+              if (contentType.startsWith("text/")) {
+                type(contentType, "utf-8");
+              } else {
+                type(contentType);
+              }
+            }
+
+            try(OutputStream output = exchange.getResponseBody()) {
+              byte[] buffer = new byte[8192];
+              int read;
+              while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+              }
+            }
+          }
+        } catch(FileNotFoundException e) {
+          String message = "Not Found " + e.getMessage();
+          System.err.println(message);
+          status(404).send("<html><h2>" + message + "</h2></html>");
+        }
       }
     };
   }
@@ -344,8 +399,13 @@ public class JExpress {
   public void listen(int port) throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
     server.createContext("/", exchange -> {
-      pipeline.accept(exchange);
-      exchange.close();
+      try {
+        pipeline.accept(exchange);
+      //exchange.close();
+      } catch(IOException e) {
+        e.printStackTrace();
+        throw e;
+      }
     });
     server.setExecutor(null);
     server.start();
@@ -364,6 +424,10 @@ public class JExpress {
     app.get("/foo/:id", (req, res) -> {
       String id = req.param("id");
       res.json("{ \"id\":\"" + id + "\" }");
+    });
+    
+    app.get("/LICENSE", (req, res) -> {
+      res.sendFile(Paths.get("LICENSE"));
     });
 
     app.listen(3000);
