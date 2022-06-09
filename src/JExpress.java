@@ -13,7 +13,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -33,10 +32,11 @@ import static java.util.stream.Collectors.joining;
 
 /**
  * An express.js-like application framework, requires Java 17
- * 
- * Compile the application with : javac JExpress.java
- * Run the application with     : java JExpress
- * Get the documentation with   : javadoc -d ../doc JExpress.java
+ * <pre>
+ *   Compile the application with : javac JExpress.java
+ *   Run the application with     : java JExpress
+ *   Get the documentation with   : javadoc -d ../doc JExpress.java
+ * </pre>
  */
 @SuppressWarnings("restriction")
 public class JExpress {
@@ -376,7 +376,7 @@ public class JExpress {
         var c = consumer;
         consumer = (components, map) -> { c.accept(components, map); map.put(key, components[index]); };
       } else {
-        predicate = predicate.and(cs -> part.equals(cs[index]));
+        predicate = predicate.and(components -> part.equals(components[index]));
       }
     }
     
@@ -512,7 +512,7 @@ public class JExpress {
     });
     
     app.get("/LICENSE", (req, res) -> {
-      res.sendFile(Paths.get("LICENSE"));
+      res.sendFile(Path.of("LICENSE"));
     });
 
     app.listen(3000);
