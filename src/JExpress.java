@@ -361,7 +361,7 @@ public class JExpress {
     void accept(Request request, Response response) throws IOException;
   }
   
-  private static Function<String, Optional<Map<String, String>>> matcher(String uri) {
+  private static Function<String[], Optional<Map<String, String>>> matcher(String uri) {
     var parts = uri.split("/");
     var length = parts.length;
     var predicate =  (Predicate<String[]>) components -> components.length >= length;
@@ -380,13 +380,14 @@ public class JExpress {
     
     var p =  predicate;
     var c = consumer;
-    return path -> {
-      var components = path.split("/");
+    return components -> {
       if (!p.test(components)) {
+        //System.err.println("do not match " + Arrays.toString(components));
         return Optional.empty();
       }
       var map = new HashMap<String,String>();
       c.accept(components, map);
+      //System.err.println("match " + Arrays.toString(components) + " " + map);
       return Optional.of(map);
     };
   }
@@ -462,10 +463,11 @@ public class JExpress {
     var matcher = matcher(path);
     var stub = asPipeline(callback);
     this.pipeline = exchange -> {
+      var components = exchange.getRequestURI().getPath().split("/");
       Optional<Map<String,String>> paramsOpt;
       if (exchange.getRequestMethod().equalsIgnoreCase(method) &&
-          (paramsOpt = matcher.apply(exchange.getRequestURI().getPath())).isPresent()) {
-        exchange.setAttribute("params", paramsOpt.get());
+          (paramsOpt = matcher.apply(components)).isPresent()) {
+        exchange.setAttribute("params", paramsOpt.orElseThrow());
         stub.accept(exchange);
       } else {
         oldPipeline.accept(exchange);
