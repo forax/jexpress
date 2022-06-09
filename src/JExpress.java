@@ -261,19 +261,19 @@ public class JExpress {
         exchange.setAttribute("status", status);
         return this;
       }
-      
+
       @Override
       public Response append(String field, String value) {
         exchange.getResponseHeaders().add(field, value);
         return this;
       }
-      
+
       @Override
       public Response set(String field, String value) {
         exchange.getResponseHeaders().set(field, value);
         return this;
       }
-      
+
       @Override
       public Response type(String type) {
         return set("Content-Type", type);
@@ -289,7 +289,7 @@ public class JExpress {
         type("application/json", "utf-8");
         send(json);
       }
-      
+
       @Override
       public void send(String body) throws IOException {
         var content = body.getBytes(UTF_8);
@@ -302,44 +302,42 @@ public class JExpress {
         if (!headers.containsKey("Content-Type")) {
           type("text/html", "utf-8");
         }
-        try(var output = exchange.getResponseBody()) {
+        try (var output = exchange.getResponseBody()) {
           output.write(content);
           output.flush();
         }
       }
-      
+
       @Override
       public void sendFile(Path path) throws IOException {
-        try {
-          try(var input = Files.newInputStream(path)) {
-            var contentLength = Files.size(path);
-            exchange.sendResponseHeaders(200, contentLength);
-            System.err.println("  send file " + 200 + " content-length " + contentLength);
+        try (var input = Files.newInputStream(path)) {
+          var contentLength = Files.size(path);
+          exchange.sendResponseHeaders(200, contentLength);
+          System.err.println("  send file " + 200 + " content-length " + contentLength);
 
-            var headers = exchange.getResponseHeaders();
-            if (!headers.containsKey("Content-Type")) {
-              var contentType = Files.probeContentType(path);
-              if (contentType == null) {
-                contentType = "application/octet-stream";
-              }
-              //System.err.println("inferred content type " + contentType);
-              if (contentType.startsWith("text/")) {
-                type(contentType, "utf-8");
-              } else {
-                type(contentType);
-              }
+          var headers = exchange.getResponseHeaders();
+          if (!headers.containsKey("Content-Type")) {
+            var contentType = Files.probeContentType(path);
+            if (contentType == null) {
+              contentType = "application/octet-stream";
             }
-
-            try(var output = exchange.getResponseBody()) {
-              var buffer = new byte[8192];
-              int read;
-              while ((read = input.read(buffer)) != -1) {
-                output.write(buffer, 0, read);
-              }
-              output.flush();
+            //System.err.println("inferred content type " + contentType);
+            if (contentType.startsWith("text/")) {
+              type(contentType, "utf-8");
+            } else {
+              type(contentType);
             }
           }
-        } catch(FileNotFoundException e) {
+
+          try (var output = exchange.getResponseBody()) {
+            var buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+              output.write(buffer, 0, read);
+            }
+            output.flush();
+          }
+        } catch (FileNotFoundException e) {
           var message = "Not Found " + e.getMessage();
           //System.err.println(message);
           status(404).send("<html><h2>" + message + "</h2></html>");
@@ -404,7 +402,8 @@ public class JExpress {
   public static JExpress express() {
     return new JExpress();
   }
-  
+
+  @FunctionalInterface
   private interface Pipeline {
     void accept(HttpExchange exchange) throws IOException;
   }
