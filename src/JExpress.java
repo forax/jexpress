@@ -1,30 +1,38 @@
-import static java.lang.System.out;
-import static java.util.stream.Collectors.joining;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
-import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import static java.lang.System.out;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Spliterators.spliteratorUnknownSize;
+import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application framework
+ * An express.js-like application framework, requires Java 17
  * 
  * Compile the application with : javac JExpress.java
  * Run the application with     : java JExpress
@@ -73,7 +81,7 @@ public class JExpress {
     return new Request() {
       @Override
       public String method() {
-        return exchange.getRequestMethod().toUpperCase();
+        return exchange.getRequestMethod().toUpperCase(Locale.ROOT);
       }
       
       @Override
@@ -84,7 +92,7 @@ public class JExpress {
       @Override
       @SuppressWarnings("unchecked")
       public String param(String name) {
-        return ((Map<String, String>)exchange.getAttribute("params")).getOrDefault(name, "");
+        return ((Map<String, String>) exchange.getAttribute("params")).getOrDefault(name, "");
       }
       
       @Override
@@ -94,9 +102,9 @@ public class JExpress {
       
       @Override
       public String bodyText() throws IOException {
-        try(InputStream in = exchange.getRequestBody();
-            InputStreamReader reader = new InputStreamReader(in);
-            BufferedReader buffered = new BufferedReader(reader)) {
+        try(var in = exchange.getRequestBody();
+            var reader = new InputStreamReader(in, UTF_8);
+            var buffered = new BufferedReader(reader)) {
           return buffered.lines().collect(joining("\n"));
         }
       }  
@@ -146,14 +154,24 @@ public class JExpress {
     default Response type(String type, String charset) {
       return type(type + "; charset=" + charset);
     }
+
+    /**
+     * Sets the Content-Type HTTP header and the charset encoding.
+     * @param type the MIME type.
+     * @param charset the charset encoding
+     * @return the current response.
+     */
+    default Response type(String type, Charset charset) {
+      return type(type, charset.name());
+    }
     
     /**
      * Sends a JSON response with the correct 'Content-Type'.
-     * @param stream a stream of Object, toString will be called on each of them.
+     * @param object an object, can be an iterable, a stream, a record or a map
      * @throws IOException if an I/O error occurs.
      */
-    void json(Stream<?> stream) throws IOException;
-    
+    void json(Object object) throws IOException;
+
     /**
      * Sends a JSON response with the correct 'Content-Type'.
      * @param json a JSON string
@@ -178,7 +196,64 @@ public class JExpress {
      */
     void sendFile(Path path) throws IOException;
   }
-  
+
+  private static String toJSON(Object o) {
+    if (o instanceof Collection<?> collection) {
+      return toJSONArray(collection.stream());
+    }
+    if (o instanceof Iterable<?> iterable) {
+      return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
+    }
+    if (o instanceof Map<?,?> map) {
+      return toJSONObject(map);
+    }
+    if (o instanceof Record record) {
+      return toJSONObject(record);
+    }
+    throw new IllegalStateException("unknown json object " + o);
+  }
+  private static String toJSONItem(Object item) {
+    if (item == null) {
+      return "null";
+    }
+    if (item instanceof String) {
+      return "\"" + item + '"';
+    }
+    if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
+      return item.toString();
+    }
+    return toJSON(item);
+  }
+  private static String toJSONArray(Stream<?> stream) {
+    return stream.map(JExpress::toJSONItem).collect(joining(", ", "{", "}"));
+  }
+  private static String toJSONObject(Map<?,?> map) {
+    return map.entrySet().stream()
+        .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
+        .collect(joining(", ", "{", "}"));
+  }
+  private static Object accessor(Method accessor, Record record) {
+    try {
+      return accessor.invoke(record);
+    } catch (IllegalAccessException e) {
+      throw (IllegalAccessError) new IllegalAccessError().initCause(e);
+    } catch (InvocationTargetException e) {
+      var cause = e.getCause();
+      if (cause instanceof RuntimeException runtimeException) {
+        throw runtimeException;
+      }
+      if (cause instanceof Error error) {
+        throw error;
+      }
+      throw new UndeclaredThrowableException(cause);
+    }
+  }
+  private static String toJSONObject(Record record) {
+    return Arrays.stream(record.getClass().getRecordComponents())
+        .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
+        .collect(joining(", ", "{", "}"));
+  }
+
   private static Response response(HttpExchange exchange) {
     return new Response() {
       @Override
@@ -203,12 +278,12 @@ public class JExpress {
       public Response type(String type) {
         return set("Content-Type", type);
       }
-      
+
       @Override
-      public void json(Stream<?> stream) throws IOException {
-        json(stream.map(Object::toString).collect(joining(", ", "[", "]")));
+      public void json(Object object) throws IOException {
+        json(toJSON(object));
       }
-      
+
       @Override
       public void json(String json) throws IOException {
         type("application/json", "utf-8");
@@ -217,27 +292,37 @@ public class JExpress {
       
       @Override
       public void send(String body) throws IOException {
-        byte[] content = body.getBytes("UTF8");
-        Integer statusAttr = (Integer)exchange.getAttribute("status");
-        int status = (statusAttr == null)? 200: statusAttr;
-        exchange.sendResponseHeaders(status, content.length);
-        Headers headers = exchange.getResponseHeaders();
+        var content = body.getBytes(UTF_8);
+        var status = (int) exchange.getAttribute("status");
+        var contentLength = content.length;
+        exchange.sendResponseHeaders(status, contentLength);
+        System.err.println("  send " + status + " content-length " + contentLength);
+
+        var headers = exchange.getResponseHeaders();
         if (!headers.containsKey("Content-Type")) {
           type("text/html", "utf-8");
         }
-        try(OutputStream output = exchange.getResponseBody()) {
+        try(var output = exchange.getResponseBody()) {
           output.write(content);
+          output.flush();
         }
       }
       
       @Override
       public void sendFile(Path path) throws IOException {
         try {
-          try(InputStream input = Files.newInputStream(path)) {
-            exchange.sendResponseHeaders(200, Files.size(path));
-            Headers headers = exchange.getResponseHeaders();
+          try(var input = Files.newInputStream(path)) {
+            var contentLength = Files.size(path);
+            exchange.sendResponseHeaders(200, contentLength);
+            System.err.println("  send file " + 200 + " content-length " + contentLength);
+
+            var headers = exchange.getResponseHeaders();
             if (!headers.containsKey("Content-Type")) {
-              String contentType = Files.probeContentType(path);
+              var contentType = Files.probeContentType(path);
+              if (contentType == null) {
+                contentType = "application/octet-stream";
+              }
+              //System.err.println("inferred content type " + contentType);
               if (contentType.startsWith("text/")) {
                 type(contentType, "utf-8");
               } else {
@@ -245,17 +330,18 @@ public class JExpress {
               }
             }
 
-            try(OutputStream output = exchange.getResponseBody()) {
-              byte[] buffer = new byte[8192];
+            try(var output = exchange.getResponseBody()) {
+              var buffer = new byte[8192];
               int read;
               while ((read = input.read(buffer)) != -1) {
                 output.write(buffer, 0, read);
               }
+              output.flush();
             }
           }
         } catch(FileNotFoundException e) {
-          String message = "Not Found " + e.getMessage();
-          System.err.println(message);
+          var message = "Not Found " + e.getMessage();
+          //System.err.println(message);
           status(404).send("<html><h2>" + message + "</h2></html>");
         }
       }
@@ -278,31 +364,30 @@ public class JExpress {
   }
   
   private static Function<String, Optional<Map<String, String>>> matcher(String uri) {
-    String[] parts = uri.split("/");
-    int length = parts.length;
-    Predicate<String[]> predicate =  cs -> cs.length >= length;
-    BiConsumer<String[], Map<String,String>> consumer = (_1, _2) -> { /* empty */ };
-    for(int i = 0; i < length; i++) {
-      int index = i;
-      String part = parts[i];
+    var parts = uri.split("/");
+    var length = parts.length;
+    var predicate =  (Predicate<String[]>) components -> components.length >= length;
+    var consumer = (BiConsumer<String[], Map<String,String>>) (_1, _2) -> { /* empty */ };
+    for(var i = 0; i < length; i++) {
+      var index = i;
+      var part = parts[i];
       if (part.startsWith(":")) {
-        String key = part.substring(1);
-        BiConsumer<String[], Map<String,String>> c = consumer;
-        consumer = (cs, map) -> { c.accept(cs, map); map.put(key, cs[index]); };
+        var key = part.substring(1);
+        var c = consumer;
+        consumer = (components, map) -> { c.accept(components, map); map.put(key, components[index]); };
       } else {
         predicate = predicate.and(cs -> part.equals(cs[index]));
       }
     }
     
-    Predicate<String[]> p =  predicate;
-    BiConsumer<String[], Map<String,String>> c = consumer;
-    return s -> {
-      String[] components = s.split("/");
+    var p =  predicate;
+    var c = consumer;
+    return path -> {
+      var components = path.split("/");
       if (!p.test(components)) {
         return Optional.empty();
       }
-      
-      HashMap<String,String> map = new HashMap<>();
+      var map = new HashMap<String,String>();
       c.accept(components, map);
       return Optional.of(map);
     };
@@ -323,14 +408,13 @@ public class JExpress {
   interface Pipeline {
     void accept(HttpExchange exchange) throws IOException;
   }
-  
+
   private static Pipeline asPipeline(Callback callback) {
     return exchange -> callback.accept(request(exchange), response(exchange));
   }
   
   private Pipeline pipeline = asPipeline((request, response) -> {
-    String message = "no match " + request.method() + " " + request.path();
-    System.err.println(message);
+    var message = "no match " + request.method() + " " + request.path();
     response.status(404).send("<html><h2>" + message + "</h2></html>");
   });
   
@@ -375,15 +459,13 @@ public class JExpress {
   }
   
   private void method(String method, String path, Callback callback) {
-    Pipeline oldPipeline = this.pipeline;
-    Function<String, Optional<Map<String, String>>> matcher = matcher(path);
-    Pipeline stub = asPipeline(callback);
+    var oldPipeline = this.pipeline;
+    var matcher = matcher(path);
+    var stub = asPipeline(callback);
     this.pipeline = exchange -> {
-      exchange.setAttribute("status", null);
-      Optional<Map<String,String>> paramsOpt = Optional.of(exchange)
-          .filter(req -> exchange.getRequestMethod().equalsIgnoreCase(method))
-          .flatMap(matcher.compose(_exchange -> _exchange.getRequestURI().getPath()));
-      if (paramsOpt.isPresent()) {
+      Optional<Map<String,String>> paramsOpt;
+      if (exchange.getRequestMethod().equalsIgnoreCase(method) &&
+          (paramsOpt = matcher.apply(exchange.getRequestURI().getPath())).isPresent()) {
         exchange.setAttribute("params", paramsOpt.get());
         stub.accept(exchange);
       } else {
@@ -398,12 +480,14 @@ public class JExpress {
    * @throws IOException if an I/O error occurs.
    */
   public void listen(int port) throws IOException {
-    HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+    var server = HttpServer.create(new InetSocketAddress(port), 0);
     server.createContext("/", exchange -> {
+      System.err.println("request " + exchange.getRequestMethod() + " " + exchange.getRequestURI());
       try {
+        exchange.setAttribute("status", 200);
         pipeline.accept(exchange);
-      //exchange.close();
-      } catch(IOException e) {
+        //exchange.close();
+      } catch(Exception e) {
         e.printStackTrace();
         throw e;
       }
@@ -419,12 +503,12 @@ public class JExpress {
   // ---------------------------------------------------------- //
   
   public static void main(String[] args) throws IOException {
+    var app = express();
 
-    JExpress app = express();
-
-    app.get("/foo/:id", (req, res) -> {
-      String id = req.param("id");
-      res.json("{ \"id\":\"" + id + "\" }");
+    app.get("/hello/:id", (req, res) -> {
+      var id = req.param("id");
+      record Hello(String id) {}
+      res.json(new Hello(id));
     });
     
     app.get("/LICENSE", (req, res) -> {

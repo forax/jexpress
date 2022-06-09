@@ -1,5 +1,5 @@
 # jexpress
-A light [express.js](http://expressjs.com/) like framework written in Java (in one file)
+A light and slow [express.js](http://expressjs.com/) like framework written in Java 17 (in one file)
 
 ## API
 - JExpress: [express()](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#express--),
@@ -17,7 +17,7 @@ A light [express.js](http://expressjs.com/) like framework written in Java (in o
             [type(type)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#type-java.lang.String-),
             [set(field, value)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#set-java.lang.String-java.lang.String-),
             [append(field, value)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#append-java.lang.String-java.lang.String-),
-            [json(stream)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.util.stream.Stream-),
+            [json(object)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
             [json(text)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
             [send(body)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#send-java.lang.String-)
 
@@ -27,10 +27,10 @@ The full [javadoc](https://rawgit.com/forax/jexpress/master/doc/index.html)
   ```java
   public static void main(String[] args) throws IOException {
 
-    JExpress app = express();
+    var app = express();
 
     app.get("/foo/:id", (req, res) -> {
-      String id = req.param("id");
+      var id = req.param("id");
       res.send("<html><p>id =" + id + "</p></html>");
     });
 
