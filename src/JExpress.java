@@ -225,7 +225,7 @@ public class JExpress {
     return toJSON(item);
   }
   private static String toJSONArray(Stream<?> stream) {
-    return stream.map(JExpress::toJSONItem).collect(joining(", ", "{", "}"));
+    return stream.map(JExpress::toJSONItem).collect(joining(", ", "[", "]"));
   }
   private static String toJSONObject(Map<?,?> map) {
     return map.entrySet().stream()
