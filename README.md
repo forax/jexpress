@@ -29,9 +29,14 @@ The full [javadoc](https://rawgit.com/forax/jexpress/master/doc/index.html)
 
     var app = express();
 
-    app.get("/foo/:id", (req, res) -> {
+    app.get("/hello/:id", (req, res) -> {
       var id = req.param("id");
-      res.send("<html><p>id =" + id + "</p></html>");
+      record Hello(String id) {}
+      res.json(new Hello(id));
+    });
+    
+    app.get("/LICENSE", (req, res) -> {
+      res.sendFile(Paths.get("LICENSE"));
     });
 
     app.listen(3000);
