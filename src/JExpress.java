@@ -74,7 +74,7 @@ public class JExpress {
      * @return the body of the request as a String.
      * @throws IOException if an I/O error occurs.
      */
-    public String bodyText() throws IOException;
+    String bodyText() throws IOException;
   }
   
   private static Request request(HttpExchange exchange) {
@@ -360,7 +360,7 @@ public class JExpress {
      * @param response a HTTP response
      * @throws IOException if an I/O occurs
      */
-    public void accept(Request request, Response response) throws IOException;
+    void accept(Request request, Response response) throws IOException;
   }
   
   private static Function<String, Optional<Map<String, String>>> matcher(String uri) {
@@ -405,7 +405,7 @@ public class JExpress {
     return new JExpress();
   }
   
-  interface Pipeline {
+  private interface Pipeline {
     void accept(HttpExchange exchange) throws IOException;
   }
 
