@@ -33,27 +33,26 @@ public class JExpress8Test {
     return PORT.getAndIncrement();
   }
 
-  /**FIXME @Test
-  public void testJSONObjectRecord() throws IOException, InterruptedException {
-    var app = express();
-    app.get("/hello/:id", (req, res) -> {
-      var id = req.param("id");
-      record Hello(String id) {}
-      res.json(new Hello(id));
-    });
-
-    var port = nextPort();
-    try(var server = app.listen(port)) {
-      var response = fetch(port, "/hello/42");
-      var body = response.body();
-      assertAll(
-          () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
-          () -> assertEquals("""
-                    {"id": "42"}\
-                    """, body)
-      );
-    }
-  }*/
+//  public void testJSONObjectRecord() throws IOException, InterruptedException {
+//    var app = express();
+//    app.get("/hello/:id", (req, res) -> {
+//      var id = req.param("id");
+//      record Hello(String id) {}
+//      res.json(new Hello(id));
+//    });
+//
+//    var port = nextPort();
+//    try(var server = app.listen(port)) {
+//      var response = fetch(port, "/hello/42");
+//      var body = response.body();
+//      assertAll(
+//          () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+//          () -> assertEquals("""
+//                    {"id": "42"}\
+//                    """, body)
+//      );
+//    }
+//  }
 
   @Test
   public void testJSONObjectMap() throws IOException, InterruptedException {
@@ -121,6 +120,28 @@ public class JExpress8Test {
     app.get("/LICENSE", (req, res) -> {
       res.sendFile(Path.of("LICENSE"));
     });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/LICENSE");
+      var body = response.body();
+      assertAll(
+          () -> assertEquals(1067, body.length()),
+          () -> assertEquals("""
+              MIT License
+                                  
+              Copyright (c) 2017 Remi Forax
+                                  
+              Permission is hereby granted, free of charge, to any person obtaining a copy\
+              """, body.lines().limit(5).collect(joining("\n")))
+      );
+    }
+  }
+
+  @Test
+  public void testStaticFile() throws IOException, InterruptedException {
+    var app = express();
+    app.use(JExpress8.staticFiles(Path.of(".")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {

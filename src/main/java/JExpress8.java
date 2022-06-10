@@ -19,6 +19,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -34,7 +35,7 @@ import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application framework, requires Java 8
+ * An express.js-like application framework, requires Java 17
  * <pre>
  *   Compile the application with : javac JExpress.java
  *   Run the application with     : java JExpress
@@ -78,40 +79,6 @@ public class JExpress8 {
      * @throws IOException if an I/O error occurs.
      */
     String bodyText() throws IOException;
-  }
-
-  private static Request request(HttpExchange exchange) {
-    return new Request() {
-      @Override
-      public String method() {
-        return exchange.getRequestMethod().toUpperCase(Locale.ROOT);
-      }
-
-      @Override
-      public String path() {
-        return exchange.getRequestURI().getPath();
-      }
-
-      @Override
-      @SuppressWarnings("unchecked")
-      public String param(String name) {
-        return ((Map<String, String>) exchange.getAttribute("params")).getOrDefault(name, "");
-      }
-
-      @Override
-      public InputStream body() {
-        return exchange.getRequestBody();
-      }
-
-      @Override
-      public String bodyText() throws IOException {
-        try(InputStream in = exchange.getRequestBody();
-            InputStreamReader reader = new InputStreamReader(in, UTF_8);
-            BufferedReader buffered = new BufferedReader(reader)) {
-          return buffered.lines().collect(joining("\n"));
-        }
-      }
-    };
   }
 
   /**
@@ -200,6 +167,202 @@ public class JExpress8 {
     void sendFile(Path path) throws IOException;
   }
 
+
+  /**
+   * A generic handler called to process an HTTP request in order to
+   * create an HTTP response.
+   *
+   * @see #use(Handler)
+   * @see Callback
+   */
+  @FunctionalInterface
+  public interface Handler {
+    /**
+     * Represent the next handler in the handler chain.
+     */
+    @FunctionalInterface
+    interface Chain {
+      /**
+       * Calls the next handler in the handler chain.
+       *
+       * @throws IOException if an I/O occurs
+       */
+      void next() throws IOException;
+    }
+
+    /**
+     * Called to process a HTTP request in order to create a HTTP response.
+     * @param request a HTTP request
+     * @param response a HTTP response
+     * @param chain represents the next handler in the handler chain
+     * @throws IOException if an I/O occurs
+     */
+    void handle(Request request, Response response, Chain chain) throws IOException;
+  }
+
+  /**
+   * A callback called to process an HTTP request in order to
+   * create an HTTP response.
+   * {@link Handler} is a more generic interface which unlike {@link Callback} allows to
+   * delegate part of the processing to another handler.
+   */
+  @FunctionalInterface
+  public interface Callback {
+    /**
+     * Called to process a HTTP request in order to create a HTTP response.
+     * @param request a HTTP request
+     * @param response a HTTP response
+     * @throws IOException if an I/O occurs
+     */
+    void accept(Request request, Response response) throws IOException;
+  }
+
+  /**
+   * A server instance
+   */
+  public interface Server extends AutoCloseable {
+    /**
+     * Close the server
+     */
+    void close();
+  }
+
+  private static final class  RequestImpl implements Request {
+    private final HttpExchange exchange;
+    private final String[] components;
+
+    RequestImpl(HttpExchange exchange, String[] components) {
+      this.exchange = exchange;
+      this.components = components;
+    }
+
+    @Override
+    public String method() {
+      return exchange.getRequestMethod().toUpperCase(Locale.ROOT);
+    }
+
+    @Override
+    public String path() {
+      return exchange.getRequestURI().getPath();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String param(String name) {
+      return ((Map<String, String>) exchange.getAttribute("params")).getOrDefault(name, "");
+    }
+
+    @Override
+    public InputStream body() {
+      return exchange.getRequestBody();
+    }
+
+    @Override
+    public String bodyText() throws IOException {
+      try (InputStream in = exchange.getRequestBody();
+           InputStreamReader reader = new InputStreamReader(in, UTF_8);
+           BufferedReader buffered = new BufferedReader(reader)) {
+        return buffered.lines().collect(joining("\n"));
+      }
+    }
+  }
+
+  private static final class ResponseImpl implements Response {
+    private final HttpExchange exchange;
+
+    ResponseImpl(HttpExchange exchange) {
+      this.exchange = exchange;
+    }
+
+    @Override
+    public Response status(int status) {
+      exchange.setAttribute("status", status);
+      return this;
+    }
+
+    @Override
+    public Response append(String field, String value) {
+      exchange.getResponseHeaders().add(field, value);
+      return this;
+    }
+
+    @Override
+    public Response set(String field, String value) {
+      exchange.getResponseHeaders().set(field, value);
+      return this;
+    }
+
+    @Override
+    public Response type(String type) {
+      return set("Content-Type", type);
+    }
+
+    @Override
+    public void json(Object object) throws IOException {
+      json(toJSON(object));
+    }
+
+    @Override
+    public void json(String json) throws IOException {
+      type("application/json", "utf-8");
+      send(json);
+    }
+
+    @Override
+    public void send(String body) throws IOException {
+      byte[] content = body.getBytes(UTF_8);
+      int status = (int) exchange.getAttribute("status");
+      int contentLength = content.length;
+      exchange.sendResponseHeaders(status, contentLength);
+      System.err.println("  send " + status + " content-length " + contentLength);
+
+      Headers headers = exchange.getResponseHeaders();
+      if (!headers.containsKey("Content-Type")) {
+        type("text/html", "utf-8");
+      }
+      try (OutputStream output = exchange.getResponseBody()) {
+        output.write(content);
+        output.flush();
+      }
+    }
+
+    @Override
+    public void sendFile(Path path) throws IOException {
+      try (InputStream input = Files.newInputStream(path)) {
+        long contentLength = Files.size(path);
+        exchange.sendResponseHeaders(200, contentLength);
+        System.err.println("  send file " + 200 + " content-length " + contentLength);
+
+        Headers headers = exchange.getResponseHeaders();
+        if (!headers.containsKey("Content-Type")) {
+          String contentType = Files.probeContentType(path);
+          if (contentType == null) {
+            contentType = "application/octet-stream";
+          }
+          //System.err.println("inferred content type " + contentType);
+          if (contentType.startsWith("text/")) {
+            type(contentType, "utf-8");
+          } else {
+            type(contentType);
+          }
+        }
+
+        try (OutputStream output = exchange.getResponseBody()) {
+          byte[] buffer = new byte[8192];
+          int read;
+          while ((read = input.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+          }
+          output.flush();
+        }
+      } catch (FileNotFoundException e) {
+        String message = "Not Found " + e.getMessage();
+        //System.err.println(message);
+        status(404).send("<html><h2>" + message + "</h2></html>");
+      }
+    }
+  }
+
   private static String toJSON(Object o) {
     if (o instanceof Collection<?>) {
       Collection<?> collection = (Collection<?>) o;
@@ -217,9 +380,9 @@ public class JExpress8 {
       Map<?,?> map = (Map<?, ?>) o;
       return toJSONObject(map);
     }
-    /*if (o instanceof Record record) {
-      return toJSONObject(record);
-    }*/
+    //if (o instanceof Record record) {
+    //  return toJSONObject(record);
+    //}
     throw new IllegalStateException("unknown json object " + o);
   }
   private static String toJSONItem(Object item) {
@@ -242,136 +405,27 @@ public class JExpress8 {
         .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
         .collect(joining(", ", "{", "}"));
   }
-  /*private static Object accessor(Method accessor, Record record) {
-    try {
-      return accessor.invoke(record);
-    } catch (IllegalAccessException e) {
-      throw (IllegalAccessError) new IllegalAccessError().initCause(e);
-    } catch (InvocationTargetException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof RuntimeException) {
-        RuntimeException runtimeException = (RuntimeException) cause;
-        throw runtimeException;
-      }
-      if (cause instanceof Error) {
-        Error error = (Error) cause;
-        throw error;
-      }
-      throw new UndeclaredThrowableException(cause);
-    }
-  }
-  private static String toJSONObject(Record record) {
-    return Arrays.stream(record.getClass().getRecordComponents())
-        .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
-        .collect(joining(", ", "{", "}"));
-  }*/
-
-  private static Response response(HttpExchange exchange) {
-    return new Response() {
-      @Override
-      public Response status(int status) {
-        exchange.setAttribute("status", status);
-        return this;
-      }
-
-      @Override
-      public Response append(String field, String value) {
-        exchange.getResponseHeaders().add(field, value);
-        return this;
-      }
-
-      @Override
-      public Response set(String field, String value) {
-        exchange.getResponseHeaders().set(field, value);
-        return this;
-      }
-
-      @Override
-      public Response type(String type) {
-        return set("Content-Type", type);
-      }
-
-      @Override
-      public void json(Object object) throws IOException {
-        json(toJSON(object));
-      }
-
-      @Override
-      public void json(String json) throws IOException {
-        type("application/json", "utf-8");
-        send(json);
-      }
-
-      @Override
-      public void send(String body) throws IOException {
-        byte[] content = body.getBytes(UTF_8);
-        int status = (int) exchange.getAttribute("status");
-        int contentLength = content.length;
-        exchange.sendResponseHeaders(status, contentLength);
-        System.err.println("  send " + status + " content-length " + contentLength);
-
-        Headers headers = exchange.getResponseHeaders();
-        if (!headers.containsKey("Content-Type")) {
-          type("text/html", "utf-8");
-        }
-        try (OutputStream output = exchange.getResponseBody()) {
-          output.write(content);
-          output.flush();
-        }
-      }
-
-      @Override
-      public void sendFile(Path path) throws IOException {
-        try (InputStream input = Files.newInputStream(path)) {
-          long contentLength = Files.size(path);
-          exchange.sendResponseHeaders(200, contentLength);
-          System.err.println("  send file " + 200 + " content-length " + contentLength);
-
-          Headers headers = exchange.getResponseHeaders();
-          if (!headers.containsKey("Content-Type")) {
-            String contentType = Files.probeContentType(path);
-            if (contentType == null) {
-              contentType = "application/octet-stream";
-            }
-            //System.err.println("inferred content type " + contentType);
-            if (contentType.startsWith("text/")) {
-              type(contentType, "utf-8");
-            } else {
-              type(contentType);
-            }
-          }
-
-          try (OutputStream output = exchange.getResponseBody()) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-              output.write(buffer, 0, read);
-            }
-            output.flush();
-          }
-        } catch (FileNotFoundException e) {
-          String message = "Not Found " + e.getMessage();
-          //System.err.println(message);
-          status(404).send("<html><h2>" + message + "</h2></html>");
-        }
-      }
-    };
-  }
-
-  /**
-   * A callback called to process a HTTP request in order to
-   * create a HTTP response.
-   */
-  @FunctionalInterface
-  public interface Callback {
-    /**
-     * Called to process a HTTP request in order to create a HTTP response.
-     * @param request a HTTP request
-     * @param response a HTTP response
-     * @throws IOException if an I/O occurs
-     */
-    void accept(Request request, Response response) throws IOException;
-  }
+  //private static Object accessor(Method accessor, Record record) {
+  //  try {
+  //    return accessor.invoke(record);
+  //  } catch (IllegalAccessException e) {
+  //    throw (IllegalAccessError) new IllegalAccessError().initCause(e);
+  //  } catch (InvocationTargetException e) {
+  //    Throwable cause = e.getCause();
+  //    if (cause instanceof RuntimeException runtimeException) {
+  //      throw runtimeException;
+  //    }
+  //    if (cause instanceof Error error) {
+  //      throw error;
+  //    }
+  //    throw new UndeclaredThrowableException(cause);
+  //  }
+  //}
+  //private static String toJSONObject(Record record) {
+  //  return Arrays.stream(record.getClass().getRecordComponents())
+  //      .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
+  //      .collect(joining(", ", "{", "}"));
+  //}
 
   private static Function<String[], Optional<Map<String, String>>> matcher(String uri) {
     String[] parts = uri.split("/");
@@ -407,7 +461,7 @@ public class JExpress8 {
   private JExpress8() {
     // empty
   }
-  
+
   /**
    * Creates an Express like application.
    * @return a new Express like application.
@@ -418,18 +472,14 @@ public class JExpress8 {
 
   @FunctionalInterface
   private interface Pipeline {
-    void accept(HttpExchange exchange) throws IOException;
+    void accept(RequestImpl request, ResponseImpl response) throws IOException;
   }
 
-  private static Pipeline asPipeline(Callback callback) {
-    return exchange -> callback.accept(request(exchange), response(exchange));
-  }
-  
-  private Pipeline pipeline = asPipeline((request, response) -> {
+  private Pipeline pipeline = (request, response) -> {
     String message = "no match " + request.method() + " " + request.path();
     response.status(404).send("<html><h2>" + message + "</h2></html>");
-  });
-  
+  };
+
   /**
    * Routes an HTTP request if the HTTP method is GET.
    * @param path a string representation of a path with interpolation.
@@ -439,7 +489,7 @@ public class JExpress8 {
   public void get(String path, Callback callback) {
     method("GET", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is POST.
    * @param path a string representation of a path with interpolation.
@@ -449,7 +499,7 @@ public class JExpress8 {
   public void post(String path, Callback callback) {
     method("POST", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is PUT.
    * @param path a string representation of a path with interpolation.
@@ -459,7 +509,7 @@ public class JExpress8 {
   public void put(String path, Callback callback) {
     method("PUT", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is DELETE.
    * @param path a string representation of a path with interpolation.
@@ -469,32 +519,65 @@ public class JExpress8 {
   public void delete(String path, Callback callback) {
     method("DELETE", path, callback);
   }
-  
+
   private void method(String method, String path, Callback callback) {
+    use(path, (request, response, chain) -> {
+      if (request.method().equalsIgnoreCase(method)) {
+        callback.accept(request, response);
+      } else {
+        chain.next();
+      }
+    });
+  }
+
+  /**
+   * Register a handler that is always match the requested path.
+   * This method is semantically equivalent to
+   * <pre>
+   *   use("/", handler);
+   * </pre>
+   *
+   * @param handler the handler called to call
+   * @see #use(String, Handler)
+   */
+  public void use(Handler handler) {
+    use("/", handler);
+  }
+
+  /**
+   * Register a handler that is called when the request path match the defined path
+   * @param path the defined path that the request path must match
+   * @param handler the handler called if the requested path match
+   */
+  public void use(String path, Handler handler) {
     Pipeline oldPipeline = this.pipeline;
     Function<String[], Optional<Map<String, String>>> matcher = matcher(path);
-    Pipeline stub = asPipeline(callback);
-    this.pipeline = exchange -> {
-      String[] components = exchange.getRequestURI().getPath().split("/");
-      Optional<Map<String,String>> paramsOpt;
-      if (exchange.getRequestMethod().equalsIgnoreCase(method) &&
-          (paramsOpt = matcher.apply(components)).isPresent()) {
-        exchange.setAttribute("params", paramsOpt.get());
-        stub.accept(exchange);
+    this.pipeline = (request, response) -> {
+      Optional<Map<String, String>> paramsOpt = matcher.apply(request.components);
+      if (paramsOpt.isPresent()) {
+        request.exchange.setAttribute("params", paramsOpt.get());
+        handler.handle(request, response, () -> oldPipeline.accept(request, response));
       } else {
-        oldPipeline.accept(exchange);
+        oldPipeline.accept(request, response);
       }
     };
   }
 
   /**
-   * Server instance
+   * Serve static files from a root directory.
+   * This method is usually used in conjuction of {@link #use(String, Handler)}.
+   * For example,
+   * <pre>
+   *   app.use(staticFiles(Path.of("."));
+   * </pre>
+   * @param root the root directory
+   * @return a handler that serves static files from the root directory
    */
-  public interface Server extends AutoCloseable {
-    /**
-     * Close the server
-     */
-    void close();
+  public static Handler staticFiles(Path root) {
+    return (request, response, chain) -> {
+      Path path = Paths.get(root.toString(), request.path());
+      response.sendFile(path);
+    };
   }
 
   /**
@@ -508,8 +591,9 @@ public class JExpress8 {
     server.createContext("/", exchange -> {
       System.err.println("request " + exchange.getRequestMethod() + " " + exchange.getRequestURI());
       try {
+        String[] components = exchange.getRequestURI().getPath().split("/");
         exchange.setAttribute("status", 200);
-        pipeline.accept(exchange);
+        pipeline.accept(new RequestImpl(exchange, components), new ResponseImpl(exchange));
         //exchange.close();
       } catch(Exception e) {
         e.printStackTrace();
@@ -521,26 +605,24 @@ public class JExpress8 {
     return () -> server.stop(1);
   }
 
-  
+
 
   // ---------------------------------------------------------- //
   //  DO NOT EDIT ABOVE THIS LINE                               //
   // ---------------------------------------------------------- //
-  
+
   public static void main(String[] args) throws IOException {
     JExpress8 app = express();
 
+    app.use(staticFiles(Paths.get(".")));
+
     app.get("/hello/:id", (req, res) -> {
       String id = req.param("id");
-      res.json("{\"id\": \"42\"}");
-    });
-    
-    app.get("/LICENSE", (req, res) -> {
-      res.sendFile(Paths.get("LICENSE"));
+      res.json(new LinkedHashMap<String, String>() {{ put("id", id); }});
     });
 
     app.listen(3000);
-    
+
     out.println("application started on port 3000");
   }
 }
