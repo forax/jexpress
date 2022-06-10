@@ -204,6 +204,9 @@ public class JExpress {
     if (o instanceof Iterable<?> iterable) {
       return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
     }
+    if (o instanceof Stream<?> stream) {
+      return toJSONArray(stream);
+    }
     if (o instanceof Map<?,?> map) {
       return toJSONObject(map);
     }
@@ -474,13 +477,24 @@ public class JExpress {
       }
     };
   }
-  
+
+  /**
+   * Server instance
+   */
+  public interface Server extends AutoCloseable {
+    /**
+     * Close the server
+     */
+    void close();
+  }
+
   /**
    * Starts a server on the given port and listen for connections.
    * @param port a TCP port
+   * @return the server instance
    * @throws IOException if an I/O error occurs.
    */
-  public void listen(int port) throws IOException {
+  public Server listen(int port) throws IOException {
     var server = HttpServer.create(new InetSocketAddress(port), 0);
     server.createContext("/", exchange -> {
       System.err.println("request " + exchange.getRequestMethod() + " " + exchange.getRequestURI());
@@ -495,6 +509,7 @@ public class JExpress {
     });
     server.setExecutor(null);
     server.start();
+    return () -> server.stop(1);
   }
 
   
