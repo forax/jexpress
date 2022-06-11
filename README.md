@@ -1,6 +1,6 @@
 # jexpress
-[JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/) like library
-written in Java 17 (in [one file](src/main/java/JExpress.java)).
+[JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/)/[sinatra](http://sinatrarb.com/)
+like library written in Java 17 (in [one file](src/main/java/JExpress.java)).
 
 There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8.
 
