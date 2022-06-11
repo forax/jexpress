@@ -1,33 +1,37 @@
 # jexpress
 A light and slow [express.js](http://expressjs.com/) like framework written in Java 17 (in one file)
 
-## API
-- JExpress: [express()](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#express--),
-            [get(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#get-java.lang.String-JExpress.Callback-),
-            [post(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#post-java.lang.String-JExpress.Callback-),
-            [put(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#put-java.lang.String-JExpress.Callback-),
-            [delete(path, callback)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#delete-java.lang.String-JExpress.Callback-) and
-            [listen(port)](https://rawgit.com/forax/jexpress/master/doc/JExpress.html#listen-int-)                   
-- Request: [body()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#body--),
-           [bodyText()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#bodyText--),
-           [method()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#method--),
-           [param(name)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#param-java.lang.String-),
-           [path()](https://rawgit.com/forax/jexpress/master/doc/JExpress.Request.html#path--)         
-- Response: [status(status)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#status-int-),
-            [type(type)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#type-java.lang.String-),
-            [set(field, value)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#set-java.lang.String-java.lang.String-),
-            [append(field, value)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#append-java.lang.String-java.lang.String-),
-            [json(object)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
-            [json(text)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#json-java.lang.String-),
-            [send(body)](https://rawgit.com/forax/jexpress/master/doc/JExpress.Response.html#send-java.lang.String-)
+## [API](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html)
+- JExpress: [express()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#express()),
+            [get(path, callback)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#get(java.lang.String,JExpress.Callback)),
+            [post(path, callback)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#post(java.lang.String,JExpress.Callback)),
+            [put(path, callback)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#put(java.lang.String,JExpress.Callback)),
+            [delete(path, callback)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#delete(java.lang.String,JExpress.Callback)),
+            [use(path, handler)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#use(java.lang.String,JExpress.Handler)),
+            [listen(port)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#listen(int)) and
+            [staticFiles(path)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#staticFiles(java.nio.file.Path)).
+- Request: [body()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#body()),
+           [bodyText()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyText()),
+           [method()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#method()),
+           [param(name)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#param(java.lang.String)) and
+           [path()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#path()).
+- Response: [status(status)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#status(int)),
+            [type(type, charset)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#type(java.lang.String,java.nio.charset.Charset)),
+            [set(field, value)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#set(java.lang.String,java.lang.String)),
+            [append(field, value)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#append(java.lang.String,java.lang.String)),
+            [json(object)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#json(java.lang.Object)),
+            [send(body)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#send(java.lang.String)) and
+            [sendFile(path)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Response.html#sendFile(java.nio.file.Path)).
 
-The full [javadoc](https://rawgit.com/forax/jexpress/master/doc/index.html)
+The full [javadoc](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html)
 
 ## Example
   ```java
   public static void main(String[] args) throws IOException {
 
     var app = express();
+
+    app.use(staticFiles(Path.of("public")));
 
     app.get("/hello/:id", (req, res) -> {
       var id = req.param("id");
@@ -43,22 +47,16 @@ The full [javadoc](https://rawgit.com/forax/jexpress/master/doc/index.html)
   }
   ```
 
-## Build
-- Compile the application with
-  ```
-  cd src
-  javac JExpress.java
-  ```
-  
+## Run and test
 - Run the application with
   ```
-  cd src
-  java JExpress
+  cd src/main/java
+  java JExpress.java
   ```
-  
-- Generate the documentation with
+
+- Test the application with Maven
   ```
-  cd src
-  javadoc -d ../doc JExpress.java
+  mvn clean package
   ```
+
  
