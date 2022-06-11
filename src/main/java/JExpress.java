@@ -33,9 +33,7 @@ import static java.util.stream.Collectors.joining;
 /**
  * An express.js-like application framework, requires Java 17
  * <pre>
- *   Compile the application with : javac JExpress.java
- *   Run the application with     : java JExpress
- *   Get the documentation with   : javadoc -d ../doc JExpress.java
+ *   Run the application with     : java JExpress.java
  * </pre>
  */
 @SuppressWarnings("restriction")
@@ -588,20 +586,17 @@ public class JExpress {
   // ---------------------------------------------------------- //
   //  DO NOT EDIT ABOVE THIS LINE                               //
   // ---------------------------------------------------------- //
-  
+
+  /**
+   * Run a simple web server that serve static files.
+   * @param args no argument
+   * @throws IOException if an IO error occurs
+   */
   public static void main(String[] args) throws IOException {
     var app = express();
-
     app.use(staticFiles(Path.of(".")));
-
-    app.get("/hello/:id", (req, res) -> {
-      var id = req.param("id");
-      record Hello(String id) {}
-      res.json(new Hello(id));
-    });
-
-    app.listen(3000);
+    app.listen(8080);
     
-    out.println("application started on port 3000");
+    out.println("application started on port 8080");
   }
 }

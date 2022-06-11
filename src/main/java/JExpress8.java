@@ -8,18 +8,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -35,11 +30,10 @@ import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application framework, requires Java 17
+ * An express.js-like application framework, requires Java 8
  * <pre>
- *   Compile the application with : javac JExpress.java
- *   Run the application with     : java JExpress
- *   Get the documentation with   : javadoc -d ../doc JExpress.java
+ *   Compile the application with : javac JExpress8.java
+ *   Run the application with     : java JExpress8
  * </pre>
  */
 @SuppressWarnings("restriction")
@@ -611,18 +605,16 @@ public class JExpress8 {
   //  DO NOT EDIT ABOVE THIS LINE                               //
   // ---------------------------------------------------------- //
 
+  /**
+   * Run a simple web server that serve static files.
+   * @param args no argument
+   * @throws IOException if an IO error occurs
+   */
   public static void main(String[] args) throws IOException {
     JExpress8 app = express();
-
     app.use(staticFiles(Paths.get(".")));
+    app.listen(8080);
 
-    app.get("/hello/:id", (req, res) -> {
-      String id = req.param("id");
-      res.json(new LinkedHashMap<String, String>() {{ put("id", id); }});
-    });
-
-    app.listen(3000);
-
-    out.println("application started on port 3000");
+    out.println("application started on port 8080");
   }
 }
