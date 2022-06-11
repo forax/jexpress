@@ -12,7 +12,7 @@ There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward
             [delete(path, callback)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#delete(java.lang.String,JExpress.Callback)),
             [use(path, handler)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#use(java.lang.String,JExpress.Handler)),
             [listen(port)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#listen(int)) and
-            [staticFiles(path)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#staticFiles(java.nio.file.Path)).
+            [staticFiles(root)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#staticFiles(java.nio.file.Path)).
 - Request: [body()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#body()),
            [bodyText()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyText()),
            [method()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#method()),
