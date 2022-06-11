@@ -30,7 +30,7 @@ import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application framework, requires Java 8
+ * An express.js-like application library, requires Java 8
  * <pre>
  *   Compile the application with : javac JExpress8.java
  *   Run the application with     : java JExpress8
@@ -606,7 +606,7 @@ public class JExpress8 {
   // ---------------------------------------------------------- //
 
   /**
-   * Run a simple web server that serve static files.
+   * Run a simple web server that serve static files of the current directory.
    * @param args no argument
    * @throws IOException if an IO error occurs
    */
