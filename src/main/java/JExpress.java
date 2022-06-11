@@ -588,7 +588,7 @@ public class JExpress {
   // ---------------------------------------------------------- //
 
   /**
-   * Run a simple web server that serve static files of the current directory.
+   * Run a simple web server that serve static files from the current directory.
    * @param args no argument
    * @throws IOException if an IO error occurs
    */
