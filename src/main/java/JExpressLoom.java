@@ -685,8 +685,8 @@ public class JExpressLoom {
   public static void main(String[] args) throws IOException {
     var app = express();
     app.use(staticFiles(Path.of(".")));
-    app.listen(3000);
+    app.listen(8080);
 
-    out.println("application started on port 3000");
+    out.println("application started on port 8080");
   }
 }
