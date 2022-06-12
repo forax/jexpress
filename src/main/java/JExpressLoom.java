@@ -506,7 +506,7 @@ public class JExpressLoom {
     public void execute(Runnable command) {
       try {
         var builder = OF_VIRTUAL.invokeExact();
-        SET_EXECUTOR.invokeExact(builder, executor);
+        SET_EXECUTOR.invokeExact(builder, (Object) executor);
         BUILDER_START.invokeExact(builder, command);
       } catch (Throwable e) {
         e.printStackTrace(System.err);
@@ -685,8 +685,8 @@ public class JExpressLoom {
   public static void main(String[] args) throws IOException {
     var app = express();
     app.use(staticFiles(Path.of(".")));
-    app.listen(8080);
+    app.listen(3000);
 
-    out.println("application started on port 8080");
+    out.println("application started on port 3000");
   }
 }
