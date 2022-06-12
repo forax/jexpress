@@ -2,7 +2,8 @@
 [JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/)/[sinatra](http://sinatrarb.com/)
 like library written in Java 17 (in [one file](src/main/java/JExpress.java)).
 
-There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8.
+There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8 and
+[JExpressLoom.java](src/main/java/JExpressLoom.java), a version that uses loom virtual threads (Java 19+) if available.
 
 ## [API](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html)
 - JExpress: [express()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#express()),

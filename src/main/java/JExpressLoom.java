@@ -40,7 +40,7 @@ import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application library, requires Java 17
+ * An express.js-like application library, requires Java 19
  * <pre>
  *   Run the application with     : java JExpress.java
  * </pre>
