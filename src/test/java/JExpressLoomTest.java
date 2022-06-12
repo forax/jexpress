@@ -35,6 +35,8 @@ public class JExpressLoomTest {
       }
     } catch(RuntimeException | Error e) {
       throw e;
+    } catch(ClassNotFoundException e) {
+      // not JDK 19
     } catch(Throwable e) {
       throw new AssertionError(e);
     }
