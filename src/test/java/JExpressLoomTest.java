@@ -1,4 +1,5 @@
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 
 import java.io.IOException;
 import java.net.URI;
@@ -12,11 +13,38 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import static java.lang.invoke.MethodHandles.publicLookup;
+import static java.lang.invoke.MethodType.methodType;
 import static java.util.stream.Collectors.joining;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JExpressLoomTest {
+  private static final boolean ENABLE_PREVIEW_AND_LOOM;
+  static {
+    var enablePreviewAndLoom = false;
+    try {
+      var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+      var ofVirtual = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass));
+      try {
+        ofVirtual.invoke();
+        enablePreviewAndLoom = true;
+      } catch(UnsupportedOperationException e) {
+        // enable preview not enabled !
+      }
+    } catch(RuntimeException | Error e) {
+      throw e;
+    } catch(Throwable e) {
+      throw new AssertionError(e);
+    }
+    ENABLE_PREVIEW_AND_LOOM = enablePreviewAndLoom;
+  }
+
+  public static boolean enablePreviewAndLoom() {
+    return ENABLE_PREVIEW_AND_LOOM;
+  }
+
   private static HttpResponse<String> fetch(int port, String uri) throws IOException, InterruptedException {
     var client = HttpClient.newBuilder().build();
     var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri)).build();
@@ -157,6 +185,25 @@ public class JExpressLoomTest {
                                   
               Permission is hereby granted, free of charge, to any person obtaining a copy\
               """, body.lines().limit(5).collect(joining("\n")))
+      );
+    }
+  }
+
+  @Test
+  @EnabledIf("enablePreviewAndLoom")
+  public void testLoom() throws IOException, InterruptedException {
+    var app = express();
+    app.get("/", (req, res) -> {
+      res.send(Thread.currentThread().toString());
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/virtualThread");
+      var body = response.body();
+      assertAll(
+          () -> assertTrue(body.contains("/")),
+          () -> assertTrue(body.startsWith("VirtualThread"))
       );
     }
   }
