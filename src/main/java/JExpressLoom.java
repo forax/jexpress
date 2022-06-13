@@ -480,8 +480,7 @@ public class JExpressLoom {
         var executorOffset = (long) objectFieldOffset.invoke(unsafe, executorField);
         var putObject = MethodHandles.lookup()
             .findVirtual(unsafeClass, "putObject", methodType(void.class, Object.class, long.class, Object.class));
-        var setExecutor = insertArguments(insertArguments(putObject, 2, executorOffset), 0, unsafe);
-        SET_EXECUTOR = setExecutor;
+        SET_EXECUTOR = insertArguments(insertArguments(putObject, 2, executorOffset), 0, unsafe);
 
         var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
         OF_VIRTUAL = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass))
