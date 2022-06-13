@@ -544,9 +544,9 @@ public class JExpress8 {
    * @param handler the handler called if the requested path match
    */
   public void use(String path, Handler handler) {
-    Pipeline oldPipeline = this.pipeline;
+    Pipeline oldPipeline = pipeline;
     Function<String[], Optional<Map<String, String>>> matcher = matcher(path);
-    this.pipeline = (request, response) -> {
+    pipeline = (request, response) -> {
       Optional<Map<String, String>> paramsOpt = matcher.apply(request.components);
       if (paramsOpt.isPresent()) {
         request.exchange.setAttribute("params", paramsOpt.get());

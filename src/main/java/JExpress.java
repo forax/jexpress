@@ -526,9 +526,9 @@ public class JExpress {
    * @param handler the handler called if the requested path match
    */
   public void use(String path, Handler handler) {
-    var oldPipeline = this.pipeline;
+    var oldPipeline = pipeline;
     var matcher = matcher(path);
-    this.pipeline = (request, response) -> {
+    pipeline = (request, response) -> {
       var paramsOpt = matcher.apply(request.components);
       if (paramsOpt.isPresent()) {
         request.exchange.setAttribute("params", paramsOpt.orElseThrow());
