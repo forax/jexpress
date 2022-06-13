@@ -456,7 +456,7 @@ public class JExpressLoom {
   }
 
 
-  private static class VirtualThreadExecutor implements Executor {
+  private static final class VirtualThreadExecutor implements Executor {
     private static class BTB {
       private String name;
       private long counter;
