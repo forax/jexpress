@@ -486,7 +486,6 @@ public class JExpressLoom {
         OF_VIRTUAL = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass))
             .asType(methodType(Object.class));
 
-        var threadBuilderClass = Class.forName("java.lang.Thread$Builder");
         BUILDER_START = publicLookup().findVirtual(ofVirtualClass, "start", methodType(Thread.class, Runnable.class))
             .asType(methodType(void.class, Object.class, Runnable.class));
 
