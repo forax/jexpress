@@ -172,7 +172,7 @@ public class JExpress8Test {
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertTrue(contentType.equals("text/javascript; charset=utf-8") || contentType.equals("application/javascript")),
+          () -> assertEquals("text/html; charset=utf-8", contentType),
           () -> assertEquals(72, body.length()),
           () -> assertEquals("""
               <!DOCTYPE html>
@@ -195,8 +195,9 @@ public class JExpress8Test {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.css");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/css; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals("text/css; charset=utf-8", contentType),
           () -> assertEquals(25, body.length()),
           () -> assertEquals("""
               /* a CSS file */
@@ -216,8 +217,9 @@ public class JExpress8Test {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.js");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/javascript; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertTrue(contentType.equals("text/javascript; charset=utf-8") || contentType.equals("application/javascript")),
           () -> assertEquals(28, body.length()),
           () -> assertEquals("""
               "use strict";

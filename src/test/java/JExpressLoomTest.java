@@ -200,8 +200,9 @@ public class JExpressLoomTest {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.html");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/html; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals("text/html; charset=utf-8", contentType),
           () -> assertEquals(72, body.length()),
           () -> assertEquals("""
               <!DOCTYPE html>
@@ -224,8 +225,9 @@ public class JExpressLoomTest {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.css");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/css; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals("text/css; charset=utf-8", contentType),
           () -> assertEquals(25, body.length()),
           () -> assertEquals("""
               /* a CSS file */
