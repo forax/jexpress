@@ -323,13 +323,10 @@ public class JExpress8 {
     @Override
     public void sendFile(Path path) throws IOException {
       try (InputStream input = Files.newInputStream(path)) {
-        long contentLength = Files.size(path);
-        exchange.sendResponseHeaders(200, contentLength);
-        System.err.println("  send file " + 200 + " content-length " + contentLength);
-
         Headers headers = exchange.getResponseHeaders();
-        if (!headers.containsKey("Content-Type")) {
-          String contentType = Files.probeContentType(path);
+        String contentType = headers.getFirst("Content-Type");
+        if (contentType == null) {
+          contentType = Files.probeContentType(path);
           if (contentType == null) {
             contentType = "application/octet-stream";
           }
@@ -340,6 +337,10 @@ public class JExpress8 {
             type(contentType);
           }
         }
+
+        long contentLength = Files.size(path);
+        exchange.sendResponseHeaders(200, contentLength);
+        System.err.println("  send file " + 200 + " content-type " + contentType + " content-length " + contentLength);
 
         try (OutputStream output = exchange.getResponseBody()) {
           byte[] buffer = new byte[8192];

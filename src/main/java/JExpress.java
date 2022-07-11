@@ -11,17 +11,22 @@ import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Scanner;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -47,26 +52,26 @@ public class JExpress {
      * @return the HTTP method.
      */
     String method();
-    
+
     /**
      * The HTTP path of the request.
      * @return the HTTP path.
      */
     String path();
-    
+
     /**
      * Get named route parameter
      * @param name name of the parameter
      * @return the value of the parameter or ""
      */
     String param(String name);
-    
+
     /**
      * Returns the body of the request
      * @return the body of the request
      */
     InputStream body();
-    
+
     /**
      * Returns the body of the request as a String.
      * @return the body of the request as a String.
@@ -165,7 +170,7 @@ public class JExpress {
   /**
    * A generic handler called to process an HTTP request in order to
    * create an HTTP response.
-   * 
+   *
    * @see #use(Handler)
    * @see Callback
    */
@@ -309,13 +314,10 @@ public class JExpress {
     @Override
     public void sendFile(Path path) throws IOException {
       try (var input = Files.newInputStream(path)) {
-        var contentLength = Files.size(path);
-        exchange.sendResponseHeaders(200, contentLength);
-        System.err.println("  send file " + 200 + " content-length " + contentLength);
-
         var headers = exchange.getResponseHeaders();
-        if (!headers.containsKey("Content-Type")) {
-          var contentType = Files.probeContentType(path);
+        var contentType = headers.getFirst("Content-Type");
+        if (contentType == null) {
+          contentType = Files.probeContentType(path);
           if (contentType == null) {
             contentType = "application/octet-stream";
           }
@@ -326,6 +328,10 @@ public class JExpress {
             type(contentType);
           }
         }
+
+        var contentLength = Files.size(path);
+        exchange.sendResponseHeaders(200, contentLength);
+        System.err.println("  send file " + 200 + " content-type " + contentType + " content-length " + contentLength);
 
         try (var output = exchange.getResponseBody()) {
           var buffer = new byte[8192];
@@ -402,7 +408,7 @@ public class JExpress {
         .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
         .collect(joining(", ", "{", "}"));
   }
-  
+
   private static Function<String[], Optional<Map<String, String>>> matcher(String uri) {
     var parts = uri.split("/");
     var length = parts.length;
@@ -419,7 +425,7 @@ public class JExpress {
         predicate = predicate.and(components -> part.equals(components[index]));
       }
     }
-    
+
     var p =  predicate;
     var c = consumer;
     return components -> {
@@ -433,11 +439,11 @@ public class JExpress {
       return Optional.of(map);
     };
   }
-  
+
   private JExpress() {
     // empty
   }
-  
+
   /**
    * Creates an Express like application.
    * @return a new Express like application.
@@ -450,12 +456,12 @@ public class JExpress {
   private interface Pipeline {
     void accept(RequestImpl request, ResponseImpl response) throws IOException;
   }
-  
+
   private Pipeline pipeline = (request, response) -> {
     var message = "no match " + request.method() + " " + request.path();
     response.status(404).send("<html><h2>" + message + "</h2></html>");
   };
-  
+
   /**
    * Routes an HTTP request if the HTTP method is GET.
    * @param path a string representation of a path with interpolation.
@@ -465,7 +471,7 @@ public class JExpress {
   public void get(String path, Callback callback) {
     method("GET", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is POST.
    * @param path a string representation of a path with interpolation.
@@ -475,7 +481,7 @@ public class JExpress {
   public void post(String path, Callback callback) {
     method("POST", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is PUT.
    * @param path a string representation of a path with interpolation.
@@ -485,7 +491,7 @@ public class JExpress {
   public void put(String path, Callback callback) {
     method("PUT", path, callback);
   }
-  
+
   /**
    * Routes an HTTP request if the HTTP method is DELETE.
    * @param path a string representation of a path with interpolation.
@@ -581,7 +587,7 @@ public class JExpress {
     return () -> server.stop(1);
   }
 
-  
+
 
   // ---------------------------------------------------------- //
   //  DO NOT EDIT ABOVE THIS LINE                               //
@@ -596,7 +602,7 @@ public class JExpress {
     var app = express();
     app.use(staticFiles(Path.of(".")));
     app.listen(8080);
-    
+
     out.println("application started on port 8080");
   }
 }

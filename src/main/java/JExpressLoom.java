@@ -318,13 +318,10 @@ public class JExpressLoom {
     @Override
     public void sendFile(Path path) throws IOException {
       try (var input = Files.newInputStream(path)) {
-        var contentLength = Files.size(path);
-        exchange.sendResponseHeaders(200, contentLength);
-        System.err.println("  send file " + 200 + " content-length " + contentLength);
-
         var headers = exchange.getResponseHeaders();
-        if (!headers.containsKey("Content-Type")) {
-          var contentType = Files.probeContentType(path);
+        var contentType = headers.getFirst("Content-Type");
+        if (contentType == null) {
+          contentType = Files.probeContentType(path);
           if (contentType == null) {
             contentType = "application/octet-stream";
           }
@@ -335,6 +332,10 @@ public class JExpressLoom {
             type(contentType);
           }
         }
+
+        var contentLength = Files.size(path);
+        exchange.sendResponseHeaders(200, contentLength);
+        System.err.println("  send file " + 200 + " content-type " + contentType + " content-length " + contentLength);
 
         try (var output = exchange.getResponseBody()) {
           var buffer = new byte[8192];
