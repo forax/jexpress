@@ -192,6 +192,72 @@ public class JExpressLoomTest {
   }
 
   @Test
+  public void testStaticFileHTMLContentType() throws IOException, InterruptedException {
+    var app = express();
+    app.use(JExpressLoom.staticFiles(Path.of("./src/test/resources")));
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/foo.html");
+      var body = response.body();
+      assertAll(
+          () -> assertEquals("text/html; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals(72, body.length()),
+          () -> assertEquals("""
+              <!DOCTYPE html>
+              <html>
+               <body>
+                 <!-- a HTML file -->
+               </body>
+              </html>
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testStaticFileCSSContentType() throws IOException, InterruptedException {
+    var app = express();
+    app.use(JExpressLoom.staticFiles(Path.of("./src/test/resources")));
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/foo.css");
+      var body = response.body();
+      assertAll(
+          () -> assertEquals("text/css; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals(25, body.length()),
+          () -> assertEquals("""
+              /* a CSS file */
+              DIV {
+              }
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testStaticFileJSContentType() throws IOException, InterruptedException {
+    var app = express();
+    app.use(JExpressLoom.staticFiles(Path.of("./src/test/resources")));
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/foo.js");
+      var body = response.body();
+      assertAll(
+          () -> assertEquals("text/javascript; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertEquals(28, body.length()),
+          () -> assertEquals("""
+              "use strict";
+               
+              // a js file 
+              """, body)
+      );
+    }
+  }
+
+  @Test
   @EnabledIf("enablePreviewAndLoom")
   public void testLoom() throws IOException, InterruptedException {
     var app = express();
