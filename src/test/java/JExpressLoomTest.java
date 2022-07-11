@@ -254,7 +254,27 @@ public class JExpressLoomTest {
           () -> assertEquals("""
               "use strict";
                
-              // a js file 
+              // a js file
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testStaticFileJSONContentType() throws IOException, InterruptedException {
+    var app = express();
+    app.use(JExpressLoom.staticFiles(Path.of("./src/test/resources")));
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetch(port, "/foo.json");
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json", contentType),
+          () -> assertEquals(36, body.length()),
+          () -> assertEquals("""
+              [true, 1, 3.14, "foo", { "a": 14 }]
               """, body)
       );
     }
