@@ -214,8 +214,9 @@ public class JExpressTest {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.js");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/javascript; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertTrue(contentType.equals("text/javascript; charset=utf-8") || contentType.equals("application/javascript")),
           () -> assertEquals(28, body.length()),
           () -> assertEquals("""
               "use strict";

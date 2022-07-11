@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.joining;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JExpress8Test {
   private static HttpResponse<String> fetch(int port, String uri) throws IOException, InterruptedException {
@@ -169,8 +170,9 @@ public class JExpress8Test {
     try(var server = app.listen(port)) {
       var response = fetch(port, "/foo.html");
       var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
-          () -> assertEquals("text/html; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
+          () -> assertTrue(contentType.equals("text/javascript; charset=utf-8") || contentType.equals("application/javascript")),
           () -> assertEquals(72, body.length()),
           () -> assertEquals("""
               <!DOCTYPE html>
