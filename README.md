@@ -46,7 +46,7 @@ The full [javadoc](https://javadoc.jitpack.io/com/github/forax/jexpress/master-S
     });
     
     app.get("/LICENSE", (req, res) -> {
-      res.sendFile(Paths.get("LICENSE"));
+      res.sendFile(Path.of("LICENSE"));
     });
 
     app.listen(3000);
