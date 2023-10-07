@@ -17,6 +17,12 @@
       <version>5.10.0</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.10.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -58,6 +64,11 @@
         <version>3.1.2</version>
         <configuration>
           <argLine>--enable-preview</argLine>
+          <properties>
+            <configurationParameters>
+                junit.jupiter.execution.parallel.enabled=false
+            </configurationParameters>
+          </properties>
         </configuration>
       </plugin>
 
@@ -94,6 +105,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-install-plugin</artifactId>
+        <!-- use older 2.x version here because 3.x requires a jar -->
         <version>2.5.2</version>
       </plugin>
 
