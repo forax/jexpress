@@ -1,6 +1,6 @@
 # jexpress
-[JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/)/[sinatra](http://sinatrarb.com/)
-like library written in Java 17 (in [one file](src/main/java/JExpress.java)).
+[JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/) clone
+written in Java 17 (in [one file](src/main/java/JExpress.java)).
 It uses virtual threads if run with Java 21 (or Java 19/20 with --enable-preview).
 
 There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8.
@@ -14,8 +14,10 @@ There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward
             [use(path, handler)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#use(java.lang.String,JExpress.Handler)),
             [listen(port)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#listen(int)) and
             [staticFiles(root)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html#staticFiles(java.nio.file.Path)).
-- Request: [body()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#body()),
+- Request: [bodyArray()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyArray()),
+           [bodyObject()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyObject()),
            [bodyText()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyText()),
+           [get()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-97364cec98-1/javadoc/JExpress.Request.html#get(java.lang.String)),
            [method()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#method()),
            [param(name)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#param(java.lang.String)) and
            [path()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#path()).
