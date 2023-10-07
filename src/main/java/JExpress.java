@@ -6,42 +6,45 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.Thread.UncaughtExceptionHandler;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Scanner;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import static java.lang.System.out;
+import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.invoke.MethodHandles.publicLookup;
+import static java.lang.invoke.MethodType.methodType;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.joining;
 
 /**
- * An express.js-like application library, requires Java 17
+ * An express.js-like application library, requires Java 17+
  * <pre>
  *   Run the application with     : java JExpress.java
  * </pre>
  */
-@SuppressWarnings("restriction")
 public class JExpress {
   /**
    * A HTTP request
@@ -452,6 +455,85 @@ public class JExpress {
     return new JExpress();
   }
 
+
+  private static final class VirtualThreadExecutor implements Executor {
+    private static class BTB {
+      private String name;
+      private long counter;
+      private int characteristics;
+      private UncaughtExceptionHandler uhe;
+    }
+    private static class VTB extends BTB {
+      private Executor executor;
+    }
+
+    private static final MethodHandle SET_EXECUTOR, OF_VIRTUAL, BUILDER_START;
+    static {
+      try {
+        var unsafeClass = Class.forName("sun.misc.Unsafe");
+        var unsafeField = unsafeClass.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        var unsafe = unsafeField.get(null);
+        var objectFieldOffset = unsafeClass.getMethod("objectFieldOffset", Field.class);
+        var executorField = VTB.class.getDeclaredField("executor");
+        executorField.setAccessible(true);
+        var executorOffset = (long) objectFieldOffset.invoke(unsafe, executorField);
+        var putObject = MethodHandles.lookup()
+            .findVirtual(unsafeClass, "putObject", methodType(void.class, Object.class, long.class, Object.class));
+        SET_EXECUTOR = insertArguments(insertArguments(putObject, 2, executorOffset), 0, unsafe);
+
+        var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+        OF_VIRTUAL = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass))
+            .asType(methodType(Object.class));
+
+        BUILDER_START = publicLookup().findVirtual(ofVirtualClass, "start", methodType(Thread.class, Runnable.class))
+            .asType(methodType(void.class, Object.class, Runnable.class));
+
+      } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private final Executor executor;
+
+    public VirtualThreadExecutor(Executor executor) {
+      this.executor = executor;
+    }
+
+    @Override
+    public void execute(Runnable command) {
+      try {
+        var builder = OF_VIRTUAL.invokeExact();
+        SET_EXECUTOR.invokeExact(builder, (Object) executor);
+        BUILDER_START.invokeExact(builder, command);
+      } catch (Throwable e) {
+        e.printStackTrace(System.err);
+        throw new AssertionError(e);
+      }
+    }
+  }
+
+  private static final Executor EXECUTOR;
+  static {
+    Executor executor;
+    try {
+      var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+      var ofVirtual = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass));
+      try {
+        ofVirtual.invoke();
+        executor = new VirtualThreadExecutor(Executors.newSingleThreadExecutor());
+      } catch(UnsupportedOperationException e) {
+        out.println("WARNING: Virtual threads are not enabled, use --enable-preview");
+        executor = null;
+      } catch(Throwable t) {
+        throw new AssertionError(t);
+      }
+    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
+      executor = null;
+    }
+    EXECUTOR = executor;
+  }
+
   @FunctionalInterface
   private interface Pipeline {
     void accept(RequestImpl request, ResponseImpl response) throws IOException;
@@ -582,7 +664,7 @@ public class JExpress {
         throw e;
       }
     });
-    server.setExecutor(null);
+    server.setExecutor(EXECUTOR);
     server.start();
     return () -> server.stop(1);
   }
