@@ -17,7 +17,7 @@ There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward
 - Request: [bodyArray()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyArray()),
            [bodyObject()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyObject()),
            [bodyText()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#bodyText()),
-           [get()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-97364cec98-1/javadoc/JExpress.Request.html#get(java.lang.String)),
+           [get(header)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-97364cec98-1/javadoc/JExpress.Request.html#get(java.lang.String)),
            [method()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#method()),
            [param(name)](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#param(java.lang.String)) and
            [path()](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.Request.html#path()).
