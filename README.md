@@ -34,9 +34,7 @@ The full [javadoc](https://javadoc.jitpack.io/com/github/forax/jexpress/master-S
 ## Example
   ```java
   public static void main(String[] args) throws IOException {
-
     var app = express();
-
     app.use(staticFiles(Path.of("public")));
 
     app.get("/hello/:id", (req, res) -> {
