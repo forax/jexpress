@@ -47,9 +47,18 @@ public class JExpressTest {
     return ENABLE_VIRTUAL_THREAD;
   }
 
-  private static HttpResponse<String> fetch(int port, String uri) throws IOException, InterruptedException {
+  private static HttpResponse<String> fetchGet(int port, String uri) throws IOException, InterruptedException {
     var client = HttpClient.newBuilder().build();
     var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri)).build();
+    return client.send(request, BodyHandlers.ofString());
+  }
+
+  private static HttpResponse<String> fetchJSONPost(int port, String uri, String jsonBody) throws IOException, InterruptedException {
+    var client = HttpClient.newBuilder().build();
+    var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri))
+        .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+        .header("Content-Type", "application/json")
+        .build();
     return client.send(request, BodyHandlers.ofString());
   }
 
@@ -74,7 +83,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/hello/42");
+      var response = fetchGet(port, "/hello/42");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -94,7 +103,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-object");
+      var response = fetchGet(port, "/json-object");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -114,7 +123,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-array");
+      var response = fetchGet(port, "/json-array");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -134,7 +143,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-stream");
+      var response = fetchGet(port, "/json-stream");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -154,7 +163,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/LICENSE");
+      var response = fetchGet(port, "/LICENSE");
       var body = response.body();
       assertAll(
           () -> assertEquals(1067, body.length()),
@@ -176,7 +185,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/LICENSE");
+      var response = fetchGet(port, "/LICENSE");
       var body = response.body();
       assertAll(
           () -> assertEquals(1067, body.length()),
@@ -198,7 +207,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.html");
+      var response = fetchGet(port, "/foo.html");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -223,7 +232,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.css");
+      var response = fetchGet(port, "/foo.css");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -245,7 +254,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.js");
+      var response = fetchGet(port, "/foo.js");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -267,7 +276,7 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.json");
+      var response = fetchGet(port, "/foo.json");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -290,11 +299,90 @@ public class JExpressTest {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/virtualThread");
+      var response = fetchGet(port, "/virtualThread");
       var body = response.body();
       assertAll(
           () -> assertTrue(body.contains("/")),
           () -> assertTrue(body.startsWith("VirtualThread"))
+      );
+    }
+  }
+
+  @Test
+  public void testJSONObjectPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyObject();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          {
+            "user": "Bob"
+          }
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(15, body.length()),
+          () -> assertEquals("""
+              {"user": "Bob"}\
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testJSONArrayPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyArray();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try (var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          [null, false, true, 3, 4.5, "foo"]
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(34, body.length()),
+          () -> assertEquals("""
+              [null, false, true, 3, 4.5, "foo"]\
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testJSONObjectAndArrayPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyObject();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          {
+            "values": [null, false, true, 3, 4.5, "foo"]
+          }
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(46, body.length()),
+          () -> assertEquals("""
+              {"values": [null, false, true, 3, 4.5, "foo"]}\
+              """, body)
       );
     }
   }

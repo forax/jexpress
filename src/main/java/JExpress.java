@@ -17,9 +17,11 @@ import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -28,16 +30,22 @@ import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static java.lang.Double.parseDouble;
+import static java.lang.Integer.parseInt;
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.publicLookup;
 import static java.lang.invoke.MethodType.methodType;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Spliterators.spliteratorUnknownSize;
+import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.IntStream.rangeClosed;
 
 /**
  * An express.js-like application library, requires Java 17+
@@ -63,6 +71,13 @@ public class JExpress {
     String path();
 
     /**
+     * The value of an HTTP header or null.
+     * @param header the header name.
+     * @return value of an HTTP header or null.
+     */
+    String get(String header);
+
+    /**
      * Get named route parameter
      * @param name name of the parameter
      * @return the value of the parameter or ""
@@ -70,10 +85,24 @@ public class JExpress {
     String param(String name);
 
     /**
-     * Returns the body of the request
-     * @return the body of the request
+     * Returns the body of the request as a JSON array.
+     * @return the body of the request as a JSON array.
+     * @throws IOException if an I/O error occurs.
      */
-    InputStream body();
+    List<Object> bodyArray() throws IOException;
+
+    /**
+     * Returns the body of the request as a JSON object.
+     * @return the body of the request as a JSON object.
+     * @throws IOException if an I/O error occurs.
+     */
+    Map<String, Object> bodyObject() throws IOException;
+
+    /**
+     * Returns the body of the request as an InputStream.
+     * @return the body of the request as an InputStream.
+     */
+    InputStream bodyStream();
 
     /**
      * Returns the body of the request as a String.
@@ -222,7 +251,7 @@ public class JExpress {
   /**
    * A server instance
    */
-  public interface Server extends AutoCloseable {
+  interface Server extends AutoCloseable {
     /**
      * Close the server
      */
@@ -241,19 +270,43 @@ public class JExpress {
     }
 
     @Override
+    public String get(String header) {
+      return exchange.getRequestHeaders().getFirst(header);
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public String param(String name) {
       return ((Map<String, String>) exchange.getAttribute("params")).getOrDefault(name, "");
     }
 
     @Override
-    public InputStream body() {
+    public InputStream bodyStream() {
       return exchange.getRequestBody();
+    }
+
+   private Object body() throws IOException {
+      if (!"application/json".equals(get("Content-Type"))) {
+        throw new IllegalStateException("Content-Type is not 'application/json'");
+      }
+      return ToyJSONParser.parse(bodyText());
+   }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> bodyObject() throws IOException {
+      return (Map<String, Object>) body();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Object> bodyArray() throws IOException {
+      return (List<Object>) body();
     }
 
     @Override
     public String bodyText() throws IOException {
-      try (var in = exchange.getRequestBody();
+      try (var in = bodyStream();
            var reader = new InputStreamReader(in, UTF_8);
            var buffered = new BufferedReader(reader)) {
         return buffered.lines().collect(joining("\n"));
@@ -287,7 +340,7 @@ public class JExpress {
 
     @Override
     public void json(Object object) throws IOException {
-      json(toJSON(object));
+      json(JSONPrettyPrinter.toJSON(object));
     }
 
     @Override
@@ -352,66 +405,6 @@ public class JExpress {
     }
   }
 
-  private static String toJSON(Object o) {
-    if (o instanceof Collection<?> collection) {
-      return toJSONArray(collection.stream());
-    }
-    if (o instanceof Iterable<?> iterable) {
-      return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
-    }
-    if (o instanceof Stream<?> stream) {
-      return toJSONArray(stream);
-    }
-    if (o instanceof Map<?,?> map) {
-      return toJSONObject(map);
-    }
-    if (o instanceof Record record) {
-      return toJSONObject(record);
-    }
-    throw new IllegalStateException("unknown json object " + o);
-  }
-  private static String toJSONItem(Object item) {
-    if (item == null) {
-      return "null";
-    }
-    if (item instanceof String) {
-      return "\"" + item + '"';
-    }
-    if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
-      return item.toString();
-    }
-    return toJSON(item);
-  }
-  private static String toJSONArray(Stream<?> stream) {
-    return stream.map(JExpress::toJSONItem).collect(joining(", ", "[", "]"));
-  }
-  private static String toJSONObject(Map<?,?> map) {
-    return map.entrySet().stream()
-        .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
-        .collect(joining(", ", "{", "}"));
-  }
-  private static Object accessor(Method accessor, Record record) {
-    try {
-      return accessor.invoke(record);
-    } catch (IllegalAccessException e) {
-      throw (IllegalAccessError) new IllegalAccessError().initCause(e);
-    } catch (InvocationTargetException e) {
-      var cause = e.getCause();
-      if (cause instanceof RuntimeException runtimeException) {
-        throw runtimeException;
-      }
-      if (cause instanceof Error error) {
-        throw error;
-      }
-      throw new UndeclaredThrowableException(cause);
-    }
-  }
-  private static String toJSONObject(Record record) {
-    return Arrays.stream(record.getClass().getRecordComponents())
-        .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
-        .collect(joining(", ", "{", "}"));
-  }
-
   private static Function<String[], Optional<Map<String, String>>> matcher(String uri) {
     var parts = uri.split("/");
     var length = parts.length;
@@ -455,6 +448,247 @@ public class JExpress {
     return new JExpress();
   }
 
+  // A Toy JSON parser that do not recognize correctly, unicode characters, escaped strings,
+  // and I'm sure many more features.
+  /*private*/ static class ToyJSONParser {
+    private ToyJSONParser() {
+      throw new AssertionError();
+    }
+
+    enum Kind {
+      NULL("(null)"),
+      TRUE("(true)"),
+      FALSE("(false)"),
+      DOUBLE("([0-9]*\\.[0-9]*)"),
+      INTEGER("([0-9]+)"),
+      STRING("\"([^\\\"]*)\""),
+      LEFT_CURLY("(\\{)"),
+      RIGHT_CURLY("(\\})"),
+      LEFT_BRACKET("(\\[)"),
+      RIGHT_BRACKET("(\\])"),
+      COLON("(\\:)"),
+      COMMA("(\\,)"),
+      BLANK("([ \t]+)")
+      ;
+
+      private final String regex;
+
+      Kind(String regex) {
+        this.regex = regex;
+      }
+
+      private static final Kind[] VALUES = values();
+    }
+
+    private record Token(Kind kind, String text, int location) {
+      private boolean is(Kind kind) {
+        return this.kind == kind;
+      }
+
+      private String expect(Kind kind) {
+        if (this.kind != kind) {
+          throw error(kind);
+        }
+        return text;
+      }
+
+      public IllegalStateException error(Kind... expectedKinds) {
+        return new IllegalStateException("expect " + Arrays.stream(expectedKinds)
+            .map(Kind::name).collect(joining(", ")) + " but recognized " + kind + " at " + location);
+      }
+    }
+
+    private record Lexer(Matcher matcher) {
+      private Token next() {
+        for(;;) {
+          if (!matcher.find()) {
+            throw new IllegalStateException("no token recognized");
+          }
+          var index = rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().orElseThrow();
+          var kind = Kind.VALUES[index - 1];
+          if (kind != Kind.BLANK) {
+            return new Token(kind, matcher.group(index), matcher.start(index));
+          }
+        }
+      }
+    }
+
+    private static final Pattern PATTERN = compile(Arrays.stream(Kind.VALUES)
+        .map(k -> k.regex).collect(joining("|")));
+
+    /**
+     * Parse a JSON text.
+     *
+     * @param input a JSON text
+     * @return a Java object corresponding to the text
+     */
+    public static Object parse(String input) {
+      var lexer = new Lexer(PATTERN.matcher(input));
+      try {
+        return parse(lexer);
+      } catch(IllegalStateException e) {
+        throw new IllegalStateException(e.getMessage() + "\n while parsing " + input, e);
+      }
+    }
+
+    private static Object parse(Lexer lexer) {
+      var token = lexer.next();
+      return switch(token.kind) {
+        case LEFT_CURLY -> {
+          var object = new HashMap<String, Object>();
+          parseObject(lexer, object);
+          yield object;
+        }
+        case LEFT_BRACKET -> {
+          var array = new ArrayList<>();
+          parseArray(lexer, array);
+          yield array;
+        }
+        default -> throw token.error(Kind.LEFT_CURLY, Kind.LEFT_BRACKET);
+      };
+    }
+
+    private static void parseObjectValue(Token token, Lexer lexer, Map<String, Object> jsonObject, String key) {
+      switch (token.kind) {
+        case NULL -> jsonObject.put(key, null);
+        case FALSE -> jsonObject.put(key, false);
+        case TRUE -> jsonObject.put(key, true);
+        case INTEGER -> jsonObject.put(key, parseInt(token.text));
+        case DOUBLE -> jsonObject.put(key, parseDouble(token.text));
+        case STRING -> jsonObject.put(key, token.text);
+        case LEFT_CURLY -> {
+          var map = new HashMap<String, Object>();
+          parseObject(lexer, map);
+          jsonObject.put(key, map);
+        }
+        case LEFT_BRACKET -> {
+          var list = new ArrayList<Object>();
+          parseArray(lexer, list);
+          jsonObject.put(key, list);
+        }
+        default -> throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
+      }
+    }
+
+    private static void parseArrayValue(Token token, Lexer lexer, List<Object> jsonArray) {
+      switch (token.kind) {
+        case NULL -> jsonArray.add(null);
+        case FALSE -> jsonArray.add(false);
+        case TRUE -> jsonArray.add(true);
+        case INTEGER -> jsonArray.add(parseInt(token.text));
+        case DOUBLE -> jsonArray.add(parseDouble(token.text));
+        case STRING -> jsonArray.add(token.text);
+        case LEFT_CURLY -> {
+          var map = new HashMap<String, Object>();
+          parseObject(lexer, map);
+          jsonArray.add(map);
+        }
+        case LEFT_BRACKET -> {
+          var list = new ArrayList<>();
+          parseArray(lexer, list);
+          jsonArray.add(list);
+        }
+        default -> throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
+      }
+    }
+
+    private static void parseObject(Lexer lexer, Map<String, Object> jsonObject) {
+      var token = lexer.next();
+      if (token.is(Kind.RIGHT_CURLY)) {
+        return;
+      }
+      for(;;) {
+        var key = token.expect(Kind.STRING);
+        lexer.next().expect(Kind.COLON);
+        token = lexer.next();
+        parseObjectValue(token, lexer, jsonObject, key);
+        token = lexer.next();
+        if (token.is(Kind.RIGHT_CURLY)) {
+          return;
+        }
+        token.expect(Kind.COMMA);
+        token = lexer.next();
+      }
+    }
+
+    private static void parseArray(Lexer lexer, List<Object> jsonArray) {
+      var token = lexer.next();
+      if (token.is(Kind.RIGHT_BRACKET)) {
+        return;
+      }
+      for(;;) {
+        parseArrayValue(token, lexer, jsonArray);
+        token = lexer.next();
+        if (token.is(Kind.RIGHT_BRACKET)) {
+          return;
+        }
+        token.expect(Kind.COMMA);
+        token = lexer.next();
+      }
+    }
+  }
+
+  private static final class JSONPrettyPrinter {
+    private static String toJSON(Object o) {
+      if (o instanceof Collection<?> collection) {
+        return toJSONArray(collection.stream());
+      }
+      if (o instanceof Iterable<?> iterable) {
+        return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
+      }
+      if (o instanceof Stream<?> stream) {
+        return toJSONArray(stream);
+      }
+      if (o instanceof Map<?,?> map) {
+        return toJSONObject(map);
+      }
+      if (o instanceof Record record) {
+        return toJSONObject(record);
+      }
+      throw new IllegalStateException("unknown json object " + o);
+    }
+    private static String toJSONItem(Object item) {
+      if (item == null) {
+        return "null";
+      }
+      if (item instanceof String) {
+        return "\"" + item + '"';
+      }
+      if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
+        return item.toString();
+      }
+      return toJSON(item);
+    }
+    private static String toJSONArray(Stream<?> stream) {
+      return stream.map(JSONPrettyPrinter::toJSONItem).collect(joining(", ", "[", "]"));
+    }
+    private static String toJSONObject(Map<?,?> map) {
+      return map.entrySet().stream()
+          .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
+          .collect(joining(", ", "{", "}"));
+    }
+    private static Object accessor(Method accessor, Record record) {
+      try {
+        return accessor.invoke(record);
+      } catch (IllegalAccessException e) {
+        throw (IllegalAccessError) new IllegalAccessError().initCause(e);
+      } catch (InvocationTargetException e) {
+        var cause = e.getCause();
+        if (cause instanceof RuntimeException runtimeException) {
+          throw runtimeException;
+        }
+        if (cause instanceof Error error) {
+          throw error;
+        }
+        throw new UndeclaredThrowableException(cause);
+      }
+    }
+    private static String toJSONObject(Record record) {
+      return Arrays.stream(record.getClass().getRecordComponents())
+          .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
+          .collect(joining(", ", "{", "}"));
+    }
+  }
 
   private static final class VirtualThreadExecutor implements Executor {
     private static class BTB {
@@ -629,7 +863,7 @@ public class JExpress {
 
   /**
    * Serve static files from a root directory.
-   * This method is usually used in conjuction of {@link #use(String, Handler)}.
+   * This method is usually used in conjunction of {@link #use(String, Handler)}.
    * For example,
    * <pre>
    *   app.use(staticFiles(Path.of("."));

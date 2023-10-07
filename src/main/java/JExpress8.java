@@ -8,35 +8,55 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.Thread.UncaughtExceptionHandler;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static java.lang.Double.parseDouble;
+import static java.lang.Integer.parseInt;
 import static java.lang.System.out;
+import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.invoke.MethodHandles.publicLookup;
+import static java.lang.invoke.MethodType.methodType;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Spliterators.spliteratorUnknownSize;
+import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.IntStream.rangeClosed;
 
 /**
- * An express.js-like application library, requires Java 8
+ * An express.js-like application library, requires Java 17+
  * <pre>
- *   Compile the application with : javac JExpress8.java
- *   Run the application with     : java JExpress8
+ *   Run the application with     : java JExpress.java
  * </pre>
  */
-@SuppressWarnings("restriction")
 public class JExpress8 {
   /**
    * A HTTP request
@@ -55,6 +75,13 @@ public class JExpress8 {
     String path();
 
     /**
+     * The value of an HTTP header or null.
+     * @param header the header name.
+     * @return value of an HTTP header or null.
+     */
+    String get(String header);
+
+    /**
      * Get named route parameter
      * @param name name of the parameter
      * @return the value of the parameter or ""
@@ -62,10 +89,24 @@ public class JExpress8 {
     String param(String name);
 
     /**
-     * Returns the body of the request
-     * @return the body of the request
+     * Returns the body of the request as a JSON array.
+     * @return the body of the request as a JSON array.
+     * @throws IOException if an I/O error occurs.
      */
-    InputStream body();
+    List<Object> bodyArray() throws IOException;
+
+    /**
+     * Returns the body of the request as a JSON object.
+     * @return the body of the request as a JSON object.
+     * @throws IOException if an I/O error occurs.
+     */
+    Map<String, Object> bodyObject() throws IOException;
+
+    /**
+     * Returns the body of the request as an InputStream.
+     * @return the body of the request as an InputStream.
+     */
+    InputStream bodyStream();
 
     /**
      * Returns the body of the request as a String.
@@ -131,7 +172,7 @@ public class JExpress8 {
 
     /**
      * Sends a JSON response with the correct 'Content-Type'.
-     * @param object an object, can be an iterable, a stream or a map
+     * @param object an object, can be an iterable, a stream, a record or a map
      * @throws IOException if an I/O error occurs.
      */
     void json(Object object) throws IOException;
@@ -214,18 +255,18 @@ public class JExpress8 {
   /**
    * A server instance
    */
-  public interface Server extends AutoCloseable {
+  interface Server extends AutoCloseable {
     /**
      * Close the server
      */
     void close();
   }
 
-  private static final class  RequestImpl implements Request {
+  private static final class RequestImpl implements Request {
     private final HttpExchange exchange;
     private final String[] components;
 
-    RequestImpl(HttpExchange exchange, String[] components) {
+    private RequestImpl(HttpExchange exchange, String[] components) {
       this.exchange = exchange;
       this.components = components;
     }
@@ -241,19 +282,43 @@ public class JExpress8 {
     }
 
     @Override
+    public String get(String header) {
+      return exchange.getRequestHeaders().getFirst(header);
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public String param(String name) {
       return ((Map<String, String>) exchange.getAttribute("params")).getOrDefault(name, "");
     }
 
     @Override
-    public InputStream body() {
+    public InputStream bodyStream() {
       return exchange.getRequestBody();
+    }
+
+    private Object body() throws IOException {
+      if (!"application/json".equals(get("Content-Type"))) {
+        throw new IllegalStateException("Content-Type is not 'application/json'");
+      }
+      return ToyJSONParser.parse(bodyText());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> bodyObject() throws IOException {
+      return (Map<String, Object>) body();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Object> bodyArray() throws IOException {
+      return (List<Object>) body();
     }
 
     @Override
     public String bodyText() throws IOException {
-      try (InputStream in = exchange.getRequestBody();
+      try (InputStream in = bodyStream();
            InputStreamReader reader = new InputStreamReader(in, UTF_8);
            BufferedReader buffered = new BufferedReader(reader)) {
         return buffered.lines().collect(joining("\n"));
@@ -264,7 +329,7 @@ public class JExpress8 {
   private static final class ResponseImpl implements Response {
     private final HttpExchange exchange;
 
-    ResponseImpl(HttpExchange exchange) {
+    private ResponseImpl(HttpExchange exchange) {
       this.exchange = exchange;
     }
 
@@ -273,35 +338,35 @@ public class JExpress8 {
       exchange.setAttribute("status", status);
       return this;
     }
-
+  
     @Override
     public Response append(String field, String value) {
       exchange.getResponseHeaders().add(field, value);
       return this;
     }
-
+  
     @Override
     public Response set(String field, String value) {
       exchange.getResponseHeaders().set(field, value);
       return this;
     }
-
+  
     @Override
     public Response type(String type) {
       return set("Content-Type", type);
     }
-
+  
     @Override
     public void json(Object object) throws IOException {
-      json(toJSON(object));
+      json(JSONPrettyPrinter.toJSON(object));
     }
-
+  
     @Override
     public void json(String json) throws IOException {
       type("application/json", "utf-8");
       send(json);
     }
-
+  
     @Override
     public void send(String body) throws IOException {
       byte[] content = body.getBytes(UTF_8);
@@ -319,7 +384,7 @@ public class JExpress8 {
         output.flush();
       }
     }
-
+  
     @Override
     public void sendFile(Path path) throws IOException {
       try (InputStream input = Files.newInputStream(path)) {
@@ -341,7 +406,7 @@ public class JExpress8 {
         long contentLength = Files.size(path);
         exchange.sendResponseHeaders(200, contentLength);
         System.err.println("  send file " + 200 + " content-type " + contentType + " content-length " + contentLength);
-
+  
         try (OutputStream output = exchange.getResponseBody()) {
           byte[] buffer = new byte[8192];
           int read;
@@ -357,70 +422,6 @@ public class JExpress8 {
       }
     }
   }
-
-  private static String toJSON(Object o) {
-    if (o instanceof Collection<?>) {
-      Collection<?> collection = (Collection<?>) o;
-      return toJSONArray(collection.stream());
-    }
-    if (o instanceof Iterable<?>) {
-      Iterable<?> iterable = (Iterable<?>) o;
-      return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
-    }
-    if (o instanceof Stream<?>) {
-      Stream<?> stream = (Stream<?>) o;
-      return toJSONArray(stream);
-    }
-    if (o instanceof Map<?,?>) {
-      Map<?,?> map = (Map<?, ?>) o;
-      return toJSONObject(map);
-    }
-    //if (o instanceof Record record) {
-    //  return toJSONObject(record);
-    //}
-    throw new IllegalStateException("unknown json object " + o);
-  }
-  private static String toJSONItem(Object item) {
-    if (item == null) {
-      return "null";
-    }
-    if (item instanceof String) {
-      return "\"" + item + '"';
-    }
-    if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
-      return item.toString();
-    }
-    return toJSON(item);
-  }
-  private static String toJSONArray(Stream<?> stream) {
-    return stream.map(JExpress8::toJSONItem).collect(joining(", ", "[", "]"));
-  }
-  private static String toJSONObject(Map<?,?> map) {
-    return map.entrySet().stream()
-        .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
-        .collect(joining(", ", "{", "}"));
-  }
-  //private static Object accessor(Method accessor, Record record) {
-  //  try {
-  //    return accessor.invoke(record);
-  //  } catch (IllegalAccessException e) {
-  //    throw (IllegalAccessError) new IllegalAccessError().initCause(e);
-  //  } catch (InvocationTargetException e) {
-  //    Throwable cause = e.getCause();
-  //    if (cause instanceof RuntimeException runtimeException) {
-  //      throw runtimeException;
-  //    }
-  //    if (cause instanceof Error error) {
-  //      throw error;
-  //    }
-  //    throw new UndeclaredThrowableException(cause);
-  //  }
-  //}
-  //private static String toJSONObject(Record record) {
-  //  return Arrays.stream(record.getClass().getRecordComponents())
-  //      .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
-  //      .collect(joining(", ", "{", "}"));
-  //}
 
   private static Function<String[], Optional<Map<String, String>>> matcher(String uri) {
     String[] parts = uri.split("/");
@@ -463,6 +464,356 @@ public class JExpress8 {
    */
   public static JExpress8 express() {
     return new JExpress8();
+  }
+
+  // A Toy JSON parser that do not recognize correctly, unicode characters, escaped strings,
+  // and I'm sure many more features.
+  /*private*/ static class ToyJSONParser {
+    private ToyJSONParser() {
+      throw new AssertionError();
+    }
+
+    enum Kind {
+      NULL("(null)"),
+      TRUE("(true)"),
+      FALSE("(false)"),
+      DOUBLE("([0-9]*\\.[0-9]*)"),
+      INTEGER("([0-9]+)"),
+      STRING("\"([^\\\"]*)\""),
+      LEFT_CURLY("(\\{)"),
+      RIGHT_CURLY("(\\})"),
+      LEFT_BRACKET("(\\[)"),
+      RIGHT_BRACKET("(\\])"),
+      COLON("(\\:)"),
+      COMMA("(\\,)"),
+      BLANK("([ \t]+)")
+      ;
+
+      private final String regex;
+
+      Kind(String regex) {
+        this.regex = regex;
+      }
+
+      private static final Kind[] VALUES = values();
+    }
+
+    private static final class Token {
+      private final Kind kind;
+      private final String text;
+      private final int location;
+
+      private Token(Kind kind, String text, int location) {
+        this.kind = kind;
+        this.text = text;
+        this.location = location;
+      }
+
+      private boolean is(Kind kind) {
+       return this.kind == kind;
+     }
+
+     private String expect(Kind kind) {
+       if (this.kind != kind) {
+         throw error(kind);
+       }
+       return text;
+     }
+
+     public IllegalStateException error(Kind... expectedKinds) {
+       return new IllegalStateException("expect " + Arrays.stream(expectedKinds)
+           .map(Kind::name).collect(joining(", ")) + " but recognized " + kind + " at " + location);
+     }
+
+      @Override
+      public String toString() {
+        return "Token[" +
+            "kind=" + kind + ", " +
+            "text=" + text + ", " +
+            "location=" + location + ']';
+      }
+
+        }
+
+    private static final class Lexer {
+      private final Matcher matcher;
+
+      private Lexer(Matcher matcher) {
+        this.matcher = matcher;
+      }
+
+      private Token next() {
+        for (; ; ) {
+          if (!matcher.find()) {
+            throw new IllegalStateException("no token recognized");
+          }
+          int index = rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().getAsInt();
+          Kind kind = Kind.VALUES[index - 1];
+          if (kind != Kind.BLANK) {
+            return new Token(kind, matcher.group(index), matcher.start(index));
+          }
+        }
+      }
+    }
+
+    private static final Pattern PATTERN = compile(Arrays.stream(Kind.VALUES)
+        .map(k -> k.regex).collect(joining("|")));
+
+    /**
+     * Parse a JSON text.
+     *
+     * @param input a JSON text
+     * @return a Java object corresponding to the text
+     */
+    public static Object parse(String input) {
+      Lexer lexer = new Lexer(PATTERN.matcher(input));
+      try {
+        return parse(lexer);
+      } catch(IllegalStateException e) {
+        throw new IllegalStateException(e.getMessage() + "\n while parsing " + input, e);
+      }
+    }
+
+    private static Object parse(Lexer lexer) {
+      Token token = lexer.next();
+      switch (token.kind) {
+        case LEFT_CURLY:
+          HashMap<String, Object> object = new HashMap<String, Object>();
+          parseObject(lexer, object);
+          return object;
+        case LEFT_BRACKET:
+          ArrayList<Object> array = new ArrayList<>();
+          parseArray(lexer, array);
+          return array;
+        default:
+          throw token.error(Kind.LEFT_CURLY, Kind.LEFT_BRACKET);
+      }
+    }
+
+    private static void parseObjectValue(Token token, Lexer lexer, Map<String, Object> jsonObject, String key) {
+      switch (token.kind) {
+        case NULL:
+          jsonObject.put(key, null);
+          break;
+        case FALSE:
+          jsonObject.put(key, false);
+          break;
+        case TRUE:
+          jsonObject.put(key, true);
+          break;
+        case INTEGER:
+          jsonObject.put(key, parseInt(token.text));
+          break;
+        case DOUBLE:
+          jsonObject.put(key, parseDouble(token.text));
+          break;
+        case STRING:
+          jsonObject.put(key, token.text);
+          break;
+        case LEFT_CURLY:
+          HashMap<String, Object> map = new HashMap<String, Object>();
+          parseObject(lexer, map);
+          jsonObject.put(key, map);
+          break;
+        case LEFT_BRACKET:
+          ArrayList<Object> list = new ArrayList<Object>();
+          parseArray(lexer, list);
+          jsonObject.put(key, list);
+          break;
+        default:
+          throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
+      }
+    }
+
+    private static void parseArrayValue(Token token, Lexer lexer, List<Object> jsonArray) {
+      switch (token.kind) {
+        case NULL:
+          jsonArray.add(null);
+          break;
+        case FALSE:
+          jsonArray.add(false);
+          break;
+        case TRUE:
+          jsonArray.add(true);
+          break;
+        case INTEGER:
+          jsonArray.add(parseInt(token.text));
+          break;
+        case DOUBLE:
+          jsonArray.add(parseDouble(token.text));
+          break;
+        case STRING:
+          jsonArray.add(token.text);
+          break;
+        case LEFT_CURLY:
+          HashMap<String, Object> map = new HashMap<String, Object>();
+          parseObject(lexer, map);
+          jsonArray.add(map);
+          break;
+        case LEFT_BRACKET:
+          ArrayList<Object> list = new ArrayList<>();
+          parseArray(lexer, list);
+          jsonArray.add(list);
+          break;
+        default:
+          throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
+      }
+    }
+
+    private static void parseObject(Lexer lexer, Map<String, Object> jsonObject) {
+      Token token = lexer.next();
+      if (token.is(Kind.RIGHT_CURLY)) {
+        return;
+      }
+      for(;;) {
+        String key = token.expect(Kind.STRING);
+        lexer.next().expect(Kind.COLON);
+        token = lexer.next();
+        parseObjectValue(token, lexer, jsonObject, key);
+        token = lexer.next();
+        if (token.is(Kind.RIGHT_CURLY)) {
+          return;
+        }
+        token.expect(Kind.COMMA);
+        token = lexer.next();
+      }
+    }
+
+    private static void parseArray(Lexer lexer, List<Object> jsonArray) {
+      Token token = lexer.next();
+      if (token.is(Kind.RIGHT_BRACKET)) {
+        return;
+      }
+      for(;;) {
+        parseArrayValue(token, lexer, jsonArray);
+        token = lexer.next();
+        if (token.is(Kind.RIGHT_BRACKET)) {
+          return;
+        }
+        token.expect(Kind.COMMA);
+        token = lexer.next();
+      }
+    }
+  }
+
+  private static final class JSONPrettyPrinter {
+    private static String toJSON(Object o) {
+      if (o instanceof Collection<?>) {
+        Collection<?> collection = (Collection<?>) o;
+        return toJSONArray(collection.stream());
+      }
+      if (o instanceof Iterable<?>) {
+        Iterable<?> iterable = (Iterable<?>) o;
+        return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
+      }
+      if (o instanceof Stream<?>) {
+        Stream<?> stream = (Stream<?>) o;
+        return toJSONArray(stream);
+      }
+      if (o instanceof Map<?, ?>) {
+        Map<?, ?> map = (Map<?, ?>) o;
+        return toJSONObject(map);
+      }
+      throw new IllegalStateException("unknown json object " + o);
+    }
+    private static String toJSONItem(Object item) {
+      if (item == null) {
+        return "null";
+      }
+      if (item instanceof String) {
+        return "\"" + item + '"';
+      }
+      if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
+        return item.toString();
+      }
+      return toJSON(item);
+    }
+    private static String toJSONArray(Stream<?> stream) {
+      return stream.map(JSONPrettyPrinter::toJSONItem).collect(joining(", ", "[", "]"));
+    }
+    private static String toJSONObject(Map<?,?> map) {
+      return map.entrySet().stream()
+          .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
+          .collect(joining(", ", "{", "}"));
+    }
+  }
+
+  private static final class VirtualThreadExecutor implements Executor {
+    private static class BTB {
+      private String name;
+      private long counter;
+      private int characteristics;
+      private UncaughtExceptionHandler uhe;
+    }
+    private static class VTB extends BTB {
+      private Executor executor;
+    }
+
+    private static final MethodHandle SET_EXECUTOR, OF_VIRTUAL, BUILDER_START;
+    static {
+      try {
+        Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+        Field unsafeField = unsafeClass.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        Object unsafe = unsafeField.get(null);
+        Method objectFieldOffset = unsafeClass.getMethod("objectFieldOffset", Field.class);
+        Field executorField = VTB.class.getDeclaredField("executor");
+        executorField.setAccessible(true);
+        long executorOffset = (long) objectFieldOffset.invoke(unsafe, executorField);
+        MethodHandle putObject = MethodHandles.lookup()
+            .findVirtual(unsafeClass, "putObject", methodType(void.class, Object.class, long.class, Object.class));
+        SET_EXECUTOR = insertArguments(insertArguments(putObject, 2, executorOffset), 0, unsafe);
+
+        Class<?> ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+        OF_VIRTUAL = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass))
+            .asType(methodType(Object.class));
+
+        BUILDER_START = publicLookup().findVirtual(ofVirtualClass, "start", methodType(Thread.class, Runnable.class))
+            .asType(methodType(void.class, Object.class, Runnable.class));
+
+      } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private final Executor executor;
+
+    public VirtualThreadExecutor(Executor executor) {
+      this.executor = executor;
+    }
+
+    @Override
+    public void execute(Runnable command) {
+      try {
+        Object builder = OF_VIRTUAL.invokeExact();
+        SET_EXECUTOR.invokeExact(builder, (Object) executor);
+        BUILDER_START.invokeExact(builder, command);
+      } catch (Throwable e) {
+        e.printStackTrace(System.err);
+        throw new AssertionError(e);
+      }
+    }
+  }
+
+  private static final Executor EXECUTOR;
+  static {
+    Executor executor;
+    try {
+      Class<?> ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+      MethodHandle ofVirtual = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass));
+      try {
+        ofVirtual.invoke();
+        executor = new VirtualThreadExecutor(Executors.newSingleThreadExecutor());
+      } catch(UnsupportedOperationException e) {
+        out.println("WARNING: Virtual threads are not enabled, use --enable-preview");
+        executor = null;
+      } catch(Throwable t) {
+        throw new AssertionError(t);
+      }
+    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
+      executor = null;
+    }
+    EXECUTOR = executor;
   }
 
   @FunctionalInterface
@@ -560,7 +911,7 @@ public class JExpress8 {
 
   /**
    * Serve static files from a root directory.
-   * This method is usually used in conjuction of {@link #use(String, Handler)}.
+   * This method is usually used in conjunction of {@link #use(String, Handler)}.
    * For example,
    * <pre>
    *   app.use(staticFiles(Path.of("."));
@@ -595,7 +946,7 @@ public class JExpress8 {
         throw e;
       }
     });
-    server.setExecutor(null);
+    server.setExecutor(EXECUTOR);
     server.start();
     return () -> server.stop(1);
   }

@@ -1,4 +1,5 @@
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 
 import java.io.IOException;
 import java.net.URI;
@@ -12,15 +13,52 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import static java.lang.invoke.MethodHandles.publicLookup;
+import static java.lang.invoke.MethodType.methodType;
 import static java.util.stream.Collectors.joining;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JExpress8Test {
-  private static HttpResponse<String> fetch(int port, String uri) throws IOException, InterruptedException {
+  private static final boolean ENABLE_VIRTUAL_THREAD;
+  static {
+    var enableVirtualThread = false;
+    try {
+      var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+      var ofVirtual = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass));
+      try {
+        ofVirtual.invoke();
+        enableVirtualThread = true;
+      } catch(UnsupportedOperationException e) {
+        // virtual threads are not available
+      }
+    } catch(RuntimeException | Error e) {
+      throw e;
+    } catch(ClassNotFoundException e) {
+      // not JDK 19+
+    } catch(Throwable e) {
+      throw new AssertionError(e);
+    }
+    ENABLE_VIRTUAL_THREAD = enableVirtualThread;
+  }
+
+  public static boolean enableVirtualThread() {
+    return ENABLE_VIRTUAL_THREAD;
+  }
+
+  private static HttpResponse<String> fetchGet(int port, String uri) throws IOException, InterruptedException {
     var client = HttpClient.newBuilder().build();
     var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri)).build();
+    return client.send(request, BodyHandlers.ofString());
+  }
+
+  private static HttpResponse<String> fetchJSONPost(int port, String uri, String jsonBody) throws IOException, InterruptedException {
+    var client = HttpClient.newBuilder().build();
+    var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri))
+        .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+        .header("Content-Type", "application/json")
+        .build();
     return client.send(request, BodyHandlers.ofString());
   }
 
@@ -64,7 +102,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-object");
+      var response = fetchGet(port, "/json-object");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -84,7 +122,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-array");
+      var response = fetchGet(port, "/json-array");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -104,7 +142,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/json-stream");
+      var response = fetchGet(port, "/json-stream");
       var body = response.body();
       assertAll(
           () -> assertEquals("application/json; charset=utf-8", response.headers().firstValue("Content-Type").orElseThrow()),
@@ -124,7 +162,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/LICENSE");
+      var response = fetchGet(port, "/LICENSE");
       var body = response.body();
       assertAll(
           () -> assertEquals(1067, body.length()),
@@ -146,7 +184,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/LICENSE");
+      var response = fetchGet(port, "/LICENSE");
       var body = response.body();
       assertAll(
           () -> assertEquals(1067, body.length()),
@@ -168,7 +206,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.html");
+      var response = fetchGet(port, "/foo.html");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -193,7 +231,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.css");
+      var response = fetchGet(port, "/foo.css");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -215,7 +253,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.js");
+      var response = fetchGet(port, "/foo.js");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -237,7 +275,7 @@ public class JExpress8Test {
 
     var port = nextPort();
     try(var server = app.listen(port)) {
-      var response = fetch(port, "/foo.json");
+      var response = fetchGet(port, "/foo.json");
       var body = response.body();
       var contentType = response.headers().firstValue("Content-Type").orElseThrow();
       assertAll(
@@ -245,6 +283,104 @@ public class JExpress8Test {
           () -> assertEquals(36, body.length()),
           () -> assertEquals("""
               [true, 1, 3.14, "foo", { "a": 14 }]
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  @EnabledIf("enableVirtualThread")
+  public void testVirtualThread() throws IOException, InterruptedException {
+    var app = express();
+    app.get("/", (req, res) -> {
+      res.send(Thread.currentThread().toString());
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchGet(port, "/virtualThread");
+      var body = response.body();
+      assertAll(
+          () -> assertTrue(body.contains("/")),
+          () -> assertTrue(body.startsWith("VirtualThread"))
+      );
+    }
+  }
+
+  @Test
+  public void testJSONObjectPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyObject();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          {
+            "user": "Bob"
+          }
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(15, body.length()),
+          () -> assertEquals("""
+              {"user": "Bob"}\
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testJSONArrayPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyArray();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try (var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          [null, false, true, 3, 4.5, "foo"]
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(34, body.length()),
+          () -> assertEquals("""
+              [null, false, true, 3, 4.5, "foo"]\
+              """, body)
+      );
+    }
+  }
+
+  @Test
+  public void testJSONObjectAndArrayPost() throws IOException, InterruptedException {
+    var app = express();
+    app.post("/user", (request, response) -> {
+      var body = request.bodyObject();
+      response.json(body);
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchJSONPost(port, "/user", """
+          {
+            "values": [null, false, true, 3, 4.5, "foo"]
+          }
+          """);
+      var body = response.body();
+      var contentType = response.headers().firstValue("Content-Type").orElseThrow();
+      assertAll(
+          () -> assertEquals("application/json; charset=utf-8", contentType),
+          () -> assertEquals(46, body.length()),
+          () -> assertEquals("""
+              {"values": [null, false, true, 3, 4.5, "foo"]}\
               """, body)
       );
     }
