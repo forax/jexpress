@@ -50,19 +50,19 @@ public class JExpressTest {
     return ENABLE_VIRTUAL_THREAD;
   }
 
+  private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().build();
+
   private static HttpResponse<String> fetchGet(int port, String uri) throws IOException, InterruptedException {
-    var client = HttpClient.newBuilder().build();
     var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri)).build();
-    return client.send(request, BodyHandlers.ofString());
+    return HTTP_CLIENT.send(request, BodyHandlers.ofString());
   }
 
   private static HttpResponse<String> fetchJSONPost(int port, String uri, String jsonBody) throws IOException, InterruptedException {
-    var client = HttpClient.newBuilder().build();
     var request = HttpRequest.newBuilder().uri(URI.create("http://localhost" + ":" + port + uri))
         .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
         .header("Content-Type", "application/json")
         .build();
-    return client.send(request, BodyHandlers.ofString());
+    return HTTP_CLIENT.send(request, BodyHandlers.ofString());
   }
 
   private static JExpress express() {
