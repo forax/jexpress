@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -930,10 +931,15 @@ public class JExpress8 {
    * Starts a server on the given port and listen for connections.
    * @param port a TCP port
    * @return the server instance
-   * @throws IOException if an I/O error occurs.
+   * @throws UncheckedIOException if an I/O error occurs when creating the server.
    */
-  public Server listen(int port) throws IOException {
-    HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+  public JExpress.Server listen(int port) {
+    HttpServer server;
+    try {
+      server = HttpServer.create(new InetSocketAddress(port), 0);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
     server.createContext("/", exchange -> {
       System.err.println("request " + exchange.getRequestMethod() + " " + exchange.getRequestURI());
       try {
@@ -960,9 +966,8 @@ public class JExpress8 {
   /**
    * Run a simple web server that serve static files from the current directory.
    * @param args no argument
-   * @throws IOException if an IO error occurs
    */
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) {
     JExpress8 app = express();
     app.use(staticFiles(Paths.get(".")));
     app.listen(8080);
