@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Execution(ExecutionMode.CONCURRENT)
-public class JExpressTest {
+public class JExpress17Test {
   private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().build();
 
   private static HttpResponse<String> fetchGet(int port, String uri) throws IOException, InterruptedException {
@@ -36,8 +36,8 @@ public class JExpressTest {
     return HTTP_CLIENT.send(request, BodyHandlers.ofString());
   }
 
-  private static JExpress express() {
-    return JExpress.express();
+  private static JExpress17 express() {
+    return JExpress17.express();
   }
 
   private static final AtomicInteger PORT = new AtomicInteger(5_19_00);
@@ -155,7 +155,7 @@ public class JExpressTest {
   @Test
   public void testStaticFile() throws IOException, InterruptedException {
     var app = express();
-    app.use(JExpress.staticFiles(Path.of(".")));
+    app.use(JExpress17.staticFiles(Path.of(".")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {
@@ -177,7 +177,7 @@ public class JExpressTest {
   @Test
   public void testStaticFileHTMLContentType() throws IOException, InterruptedException {
     var app = express();
-    app.use(JExpress.staticFiles(Path.of("./src/test/resources")));
+    app.use(JExpress17.staticFiles(Path.of("./src/test/resources")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {
@@ -202,7 +202,7 @@ public class JExpressTest {
   @Test
   public void testStaticFileCSSContentType() throws IOException, InterruptedException {
     var app = express();
-    app.use(JExpress.staticFiles(Path.of("./src/test/resources")));
+    app.use(JExpress17.staticFiles(Path.of("./src/test/resources")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {
@@ -224,7 +224,7 @@ public class JExpressTest {
   @Test
   public void testStaticFileJSContentType() throws IOException, InterruptedException {
     var app = express();
-    app.use(JExpress.staticFiles(Path.of("./src/test/resources")));
+    app.use(JExpress17.staticFiles(Path.of("./src/test/resources")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {
@@ -246,7 +246,7 @@ public class JExpressTest {
   @Test
   public void testStaticFileJSONContentType() throws IOException, InterruptedException {
     var app = express();
-    app.use(JExpress.staticFiles(Path.of("./src/test/resources")));
+    app.use(JExpress17.staticFiles(Path.of("./src/test/resources")));
 
     var port = nextPort();
     try(var server = app.listen(port)) {
@@ -259,24 +259,6 @@ public class JExpressTest {
           () -> assertEquals("""
               [true, 1, 3.14, "foo", { "a": 14 }]
               """, body)
-      );
-    }
-  }
-
-  @Test
-  public void testVirtualThread() throws IOException, InterruptedException {
-    var app = express();
-    app.get("/", (req, res) -> {
-      res.send(Thread.currentThread().toString());
-    });
-
-    var port = nextPort();
-    try(var server = app.listen(port)) {
-      var response = fetchGet(port, "/virtualThread");
-      var body = response.body();
-      assertAll(
-          () -> assertTrue(body.contains("/")),
-          () -> assertTrue(body.startsWith("VirtualThread"))
       );
     }
   }

@@ -35,7 +35,7 @@
           <execution>
             <id>default-compile</id>
             <configuration>
-              <release>17</release>
+              <release>25</release>
             </configuration>
           </execution>
           <execution>
@@ -46,15 +46,16 @@
             <configuration>
               <excludes>
                 <exclude>JExpress.java</exclude>
+                <exclude>JExpress17.java</exclude>
               </excludes>
             </configuration>
           </execution>
         </executions>
         <configuration>
           <release>8</release>
-          <testRelease>17</testRelease>
+          <testRelease>25</testRelease>
           <jdkToolchain>
-            <version>17</version>
+            <version>25</version>
           </jdkToolchain>
         </configuration>
       </plugin>

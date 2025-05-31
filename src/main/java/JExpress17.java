@@ -1,13 +1,46 @@
-import module java.base;
-import module jdk.httpserver;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Spliterators;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
- * An express.js-like application library, requires Java 25
+ * An express.js-like application library, requires Java 17+
  * <pre>
  *   Run the application with     : java JExpress.java
  * </pre>
  */
-public final class JExpress {
+public final class JExpress17 {
   /**
    * A HTTP request
    */
@@ -363,7 +396,7 @@ public final class JExpress {
     var parts = uri.split("/");
     var length = parts.length;
     var predicate =  (Predicate<String[]>) components -> components.length >= length;
-    var consumer = (BiConsumer<String[], Map<String,String>>) (_, _) -> { /* empty */ };
+    var consumer = (BiConsumer<String[], Map<String,String>>) (_1, _2) -> { /* empty */ };
     for(var i = 0; i < length; i++) {
       var index = i;
       var part = parts[i];
@@ -390,7 +423,7 @@ public final class JExpress {
     };
   }
 
-  private JExpress() {
+  private JExpress17() {
     // empty
   }
 
@@ -398,8 +431,8 @@ public final class JExpress {
    * Creates an Express like application.
    * @return a new Express like application.
    */
-  public static JExpress express() {
-    return new JExpress();
+  public static JExpress17 express() {
+    return new JExpress17();
   }
 
   // A Toy JSON parser that do not recognize correctly, unicode characters, escaped strings,
@@ -516,7 +549,7 @@ public final class JExpress {
           jsonObject.put(key, map);
         }
         case LEFT_BRACKET -> {
-          var list = new ArrayList<>();
+          var list = new ArrayList<Object>();
           parseArray(lexer, list);
           jsonObject.put(key, list);
         }
@@ -602,12 +635,16 @@ public final class JExpress {
       throw new IllegalStateException("unknown json object " + o);
     }
     private static String toJSONItem(Object item) {
-      return switch (item) {
-        case null -> "null";
-        case String s -> '"' + s + '"';
-        case Boolean _, Integer _, Double _ -> item.toString();
-        default -> toJSON(item);
-      };
+      if (item == null) {
+        return "null";
+      }
+      if (item instanceof String) {
+        return "\"" + item + '"';
+      }
+      if (item instanceof Boolean || item instanceof Integer || item instanceof Double) {
+        return item.toString();
+      }
+      return toJSON(item);
     }
     private static String toJSONArray(Stream<?> stream) {
       return stream.map(JSONPrettyPrinter::toJSONItem).collect(Collectors.joining(", ", "[", "]"));
@@ -638,84 +675,6 @@ public final class JExpress {
           .map(c -> "\"" + c.getName() + "\": " + toJSONItem(accessor(c.getAccessor(), record)))
           .collect(Collectors.joining(", ", "{", "}"));
     }
-  }
-
-  private static final class VirtualThreadExecutor implements Executor {
-    private static class BTB {
-      private String name;
-      private long counter;
-      private int characteristics;
-      private Thread.UncaughtExceptionHandler uhe;
-    }
-    private static class VTB extends BTB {
-      private Executor executor;
-    }
-
-    private static final MethodHandle SET_EXECUTOR, OF_VIRTUAL, BUILDER_START;
-    static {
-      try {
-        var unsafeClass = Class.forName("sun.misc.Unsafe");
-        var unsafeField = unsafeClass.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        var unsafe = unsafeField.get(null);
-        var objectFieldOffset = unsafeClass.getMethod("objectFieldOffset", Field.class);
-        var executorField = VTB.class.getDeclaredField("executor");
-        executorField.setAccessible(true);
-        var executorOffset = (long) objectFieldOffset.invoke(unsafe, executorField);
-        var putObject = MethodHandles.lookup()
-            .findVirtual(unsafeClass, "putObject", MethodType.methodType(void.class, Object.class, long.class, Object.class));
-        SET_EXECUTOR = MethodHandles.insertArguments(MethodHandles.insertArguments(putObject, 2, executorOffset), 0, unsafe);
-
-        var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
-        OF_VIRTUAL = MethodHandles.publicLookup().findStatic(Thread.class, "ofVirtual", MethodType.methodType(ofVirtualClass))
-            .asType(MethodType.methodType(Object.class));
-
-        BUILDER_START = MethodHandles.publicLookup().findVirtual(ofVirtualClass, "start", MethodType.methodType(Thread.class, Runnable.class))
-            .asType(MethodType.methodType(void.class, Object.class, Runnable.class));
-
-      } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-        throw new AssertionError(e);
-      }
-    }
-
-    private final Executor executor;
-
-    public VirtualThreadExecutor(Executor executor) {
-      this.executor = executor;
-    }
-
-    @Override
-    public void execute(Runnable command) {
-      try {
-        var builder = OF_VIRTUAL.invokeExact();
-        SET_EXECUTOR.invokeExact(builder, (Object) executor);
-        BUILDER_START.invokeExact(builder, command);
-      } catch (Throwable e) {
-        e.printStackTrace(System.err);
-        throw new AssertionError(e);
-      }
-    }
-  }
-
-  private static final Executor EXECUTOR;
-  static {
-    Executor executor;
-    try {
-      var ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
-      var ofVirtual = MethodHandles.publicLookup().findStatic(Thread.class, "ofVirtual", MethodType.methodType(ofVirtualClass));
-      try {
-        ofVirtual.invoke();
-        executor = new VirtualThreadExecutor(Executors.newSingleThreadExecutor());
-      } catch(UnsupportedOperationException e) {
-        System.out.println("WARNING: Virtual threads are not enabled, use --enable-preview");
-        executor = null;
-      } catch(Throwable t) {
-        throw new AssertionError(t);
-      }
-    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
-      executor = null;
-    }
-    EXECUTOR = executor;
   }
 
   @FunctionalInterface
@@ -822,7 +781,7 @@ public final class JExpress {
    * @return a handler that serves static files from the root directory
    */
   public static Handler staticFiles(Path root) {
-    return (request, response, _) -> {
+    return (request, response, chain) -> {
       var path = Path.of(root.toString(), request.path());
       response.sendFile(path);
     };
@@ -853,7 +812,7 @@ public final class JExpress {
         throw e;
       }
     });
-    server.setExecutor(EXECUTOR);
+    server.setExecutor(null);
     server.start();
     return () -> server.stop(1);
   }

@@ -1,8 +1,9 @@
 # jexpress
 [JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/) clone
-written in Java 17 (in [one file](src/main/java/JExpress.java)).
-It uses virtual threads if run with Java 21 (or Java 19/20 with --enable-preview).
+written in Java 25 (in [one file](src/main/java/JExpress.java)).
+It uses virtual threads with its own single-thread scheduled (using Unsafe hence the warnings at start-up).
 
+There is also [JExpress17.java](src/main/java/JExpress8.java), a version backward compatible with Java 17 (supports JSON <-> record mapping).
 There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8.
 
 ## [API](https://javadoc.jitpack.io/com/github/forax/jexpress/master-SNAPSHOT/javadoc/JExpress.html)
@@ -52,7 +53,7 @@ The full [javadoc](https://javadoc.jitpack.io/com/github/forax/jexpress/master-S
   ```
 
 ## Run and test
-- Run the application with
+- Run the application with Java 25
   ```
   cd src/main/java
   java JExpress.java

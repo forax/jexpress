@@ -9,15 +9,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.lang.Thread.UncaughtExceptionHandler;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,29 +22,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.Spliterators;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
-import static java.lang.Double.parseDouble;
-import static java.lang.Integer.parseInt;
-import static java.lang.System.out;
-import static java.lang.invoke.MethodHandles.insertArguments;
-import static java.lang.invoke.MethodHandles.publicLookup;
-import static java.lang.invoke.MethodType.methodType;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Spliterators.spliteratorUnknownSize;
-import static java.util.regex.Pattern.compile;
-import static java.util.stream.Collectors.joining;
-import static java.util.stream.IntStream.rangeClosed;
 
 /**
  * An express.js-like application library, requires Java 17+
@@ -58,7 +40,7 @@ import static java.util.stream.IntStream.rangeClosed;
  *   Run the application with     : java JExpress.java
  * </pre>
  */
-public class JExpress8 {
+public final class JExpress8 {
   /**
    * A HTTP request
    */
@@ -256,7 +238,7 @@ public class JExpress8 {
   /**
    * A server instance
    */
-  interface Server extends AutoCloseable {
+  public interface Server extends AutoCloseable {
     /**
      * Close the server
      */
@@ -320,9 +302,9 @@ public class JExpress8 {
     @Override
     public String bodyText() throws IOException {
       try (InputStream in = bodyStream();
-           InputStreamReader reader = new InputStreamReader(in, UTF_8);
+           InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8);
            BufferedReader buffered = new BufferedReader(reader)) {
-        return buffered.lines().collect(joining("\n"));
+        return buffered.lines().collect(Collectors.joining("\n"));
       }
     }
   }
@@ -370,7 +352,7 @@ public class JExpress8 {
   
     @Override
     public void send(String body) throws IOException {
-      byte[] content = body.getBytes(UTF_8);
+      byte[] content = body.getBytes(StandardCharsets.UTF_8);
       int status = (int) exchange.getAttribute("status");
       int contentLength = content.length;
       exchange.sendResponseHeaders(status, contentLength);
@@ -523,7 +505,7 @@ public class JExpress8 {
 
      public IllegalStateException error(Kind... expectedKinds) {
        return new IllegalStateException("expect " + Arrays.stream(expectedKinds)
-           .map(Kind::name).collect(joining(", ")) + " but recognized " + kind + " at " + location);
+           .map(Kind::name).collect(Collectors.joining(", ")) + " but recognized " + kind + " at " + location);
      }
 
       @Override
@@ -548,7 +530,7 @@ public class JExpress8 {
           if (!matcher.find()) {
             throw new IllegalStateException("no token recognized");
           }
-          int index = rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().getAsInt();
+          int index = IntStream.rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().getAsInt();
           Kind kind = Kind.VALUES[index - 1];
           if (kind != Kind.BLANK) {
             return new Token(kind, matcher.group(index), matcher.start(index));
@@ -557,8 +539,8 @@ public class JExpress8 {
       }
     }
 
-    private static final Pattern PATTERN = compile(Arrays.stream(Kind.VALUES)
-        .map(k -> k.regex).collect(joining("|")));
+    private static final Pattern PATTERN = Pattern.compile(Arrays.stream(Kind.VALUES)
+        .map(k -> k.regex).collect(Collectors.joining("|")));
 
     /**
      * Parse a JSON text.
@@ -603,10 +585,10 @@ public class JExpress8 {
           jsonObject.put(key, true);
           break;
         case INTEGER:
-          jsonObject.put(key, parseInt(token.text));
+          jsonObject.put(key, Integer.parseInt(token.text));
           break;
         case DOUBLE:
-          jsonObject.put(key, parseDouble(token.text));
+          jsonObject.put(key, Double.parseDouble(token.text));
           break;
         case STRING:
           jsonObject.put(key, token.text);
@@ -638,10 +620,10 @@ public class JExpress8 {
           jsonArray.add(true);
           break;
         case INTEGER:
-          jsonArray.add(parseInt(token.text));
+          jsonArray.add(Integer.parseInt(token.text));
           break;
         case DOUBLE:
-          jsonArray.add(parseDouble(token.text));
+          jsonArray.add(Double.parseDouble(token.text));
           break;
         case STRING:
           jsonArray.add(token.text);
@@ -705,7 +687,7 @@ public class JExpress8 {
       }
       if (o instanceof Iterable<?>) {
         Iterable<?> iterable = (Iterable<?>) o;
-        return toJSONArray(StreamSupport.stream(spliteratorUnknownSize(iterable.iterator(), 0), false));
+        return toJSONArray(StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterable.iterator(), 0), false));
       }
       if (o instanceof Stream<?>) {
         Stream<?> stream = (Stream<?>) o;
@@ -730,91 +712,13 @@ public class JExpress8 {
       return toJSON(item);
     }
     private static String toJSONArray(Stream<?> stream) {
-      return stream.map(JSONPrettyPrinter::toJSONItem).collect(joining(", ", "[", "]"));
+      return stream.map(JSONPrettyPrinter::toJSONItem).collect(Collectors.joining(", ", "[", "]"));
     }
     private static String toJSONObject(Map<?,?> map) {
       return map.entrySet().stream()
           .map(e -> "\"" + e.getKey() + "\": " + toJSONItem(e.getValue()))
-          .collect(joining(", ", "{", "}"));
+          .collect(Collectors.joining(", ", "{", "}"));
     }
-  }
-
-  private static final class VirtualThreadExecutor implements Executor {
-    private static class BTB {
-      private String name;
-      private long counter;
-      private int characteristics;
-      private UncaughtExceptionHandler uhe;
-    }
-    private static class VTB extends BTB {
-      private Executor executor;
-    }
-
-    private static final MethodHandle SET_EXECUTOR, OF_VIRTUAL, BUILDER_START;
-    static {
-      try {
-        Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
-        Field unsafeField = unsafeClass.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        Object unsafe = unsafeField.get(null);
-        Method objectFieldOffset = unsafeClass.getMethod("objectFieldOffset", Field.class);
-        Field executorField = VTB.class.getDeclaredField("executor");
-        executorField.setAccessible(true);
-        long executorOffset = (long) objectFieldOffset.invoke(unsafe, executorField);
-        MethodHandle putObject = MethodHandles.lookup()
-            .findVirtual(unsafeClass, "putObject", methodType(void.class, Object.class, long.class, Object.class));
-        SET_EXECUTOR = insertArguments(insertArguments(putObject, 2, executorOffset), 0, unsafe);
-
-        Class<?> ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
-        OF_VIRTUAL = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass))
-            .asType(methodType(Object.class));
-
-        BUILDER_START = publicLookup().findVirtual(ofVirtualClass, "start", methodType(Thread.class, Runnable.class))
-            .asType(methodType(void.class, Object.class, Runnable.class));
-
-      } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-        throw new AssertionError(e);
-      }
-    }
-
-    private final Executor executor;
-
-    public VirtualThreadExecutor(Executor executor) {
-      this.executor = executor;
-    }
-
-    @Override
-    public void execute(Runnable command) {
-      try {
-        Object builder = OF_VIRTUAL.invokeExact();
-        SET_EXECUTOR.invokeExact(builder, (Object) executor);
-        BUILDER_START.invokeExact(builder, command);
-      } catch (Throwable e) {
-        e.printStackTrace(System.err);
-        throw new AssertionError(e);
-      }
-    }
-  }
-
-  private static final Executor EXECUTOR;
-  static {
-    Executor executor;
-    try {
-      Class<?> ofVirtualClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
-      MethodHandle ofVirtual = publicLookup().findStatic(Thread.class, "ofVirtual", methodType(ofVirtualClass));
-      try {
-        ofVirtual.invoke();
-        executor = new VirtualThreadExecutor(Executors.newSingleThreadExecutor());
-      } catch(UnsupportedOperationException e) {
-        out.println("WARNING: Virtual threads are not enabled, use --enable-preview");
-        executor = null;
-      } catch(Throwable t) {
-        throw new AssertionError(t);
-      }
-    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
-      executor = null;
-    }
-    EXECUTOR = executor;
   }
 
   @FunctionalInterface
@@ -952,7 +856,7 @@ public class JExpress8 {
         throw e;
       }
     });
-    server.setExecutor(EXECUTOR);
+    server.setExecutor(null);
     server.start();
     return () -> server.stop(1);
   }
@@ -972,6 +876,6 @@ public class JExpress8 {
     app.use(staticFiles(Paths.get(".")));
     app.listen(8080);
 
-    out.println("application started on port 8080");
+    System.out.println("application started on port 8080");
   }
 }
