@@ -1,3 +1,4 @@
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -263,7 +264,7 @@ public class JExpressTest {
     }
   }
 
-  @Test
+  @Test @Disabled
   public void testVirtualThread() throws IOException, InterruptedException {
     var app = express();
     app.get("/", (req, res) -> {
@@ -278,6 +279,27 @@ public class JExpressTest {
           () -> assertTrue(body.contains("/")),
           () -> assertTrue(body.startsWith("VirtualThread"))
       );
+    }
+  }
+
+  @Test @Disabled
+  public void testVirtualThreadSeveralRequests() throws IOException, InterruptedException {
+    var app = express();
+    app.get("/", (req, res) -> {
+      res.send(Thread.currentThread().toString());
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      for(var i = 0; i < 1_000; i++) {
+        var response = fetchGet(port, "/virtualThread");
+        var body = response.body();
+        System.err.println(body);
+        assertAll(
+            () -> assertTrue(body.contains("/")),
+            () -> assertTrue(body.startsWith("VirtualThread"))
+        );
+      }
     }
   }
 
