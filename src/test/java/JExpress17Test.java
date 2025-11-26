@@ -40,7 +40,7 @@ public class JExpress17Test {
     return JExpress17.express();
   }
 
-  private static final AtomicInteger PORT = new AtomicInteger(5_19_00);
+  private static final AtomicInteger PORT = new AtomicInteger(5_17_00);
 
   private static int nextPort() {
     return PORT.getAndIncrement();
