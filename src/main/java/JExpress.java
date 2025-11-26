@@ -848,7 +848,7 @@ public final class JExpress {
         exchange.setAttribute("status", 200);
         pipeline.accept(new RequestImpl(exchange, components), new ResponseImpl(exchange));
         //exchange.close();
-      } catch(Exception e) {
+      } catch(IOException e) {
         e.printStackTrace();
         throw e;
       }
@@ -866,9 +866,8 @@ public final class JExpress {
 
   /**
    * Run a simple web server that serve static files from the current directory.
-   * @param args no argument
    */
-  public static void main(String[] args) {
+  static void main() {
     var app = express();
     app.use(staticFiles(Path.of(".")));
     app.listen(8080);

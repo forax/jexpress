@@ -851,7 +851,7 @@ public final class JExpress8 {
         exchange.setAttribute("status", 200);
         pipeline.accept(new RequestImpl(exchange, components), new ResponseImpl(exchange));
         //exchange.close();
-      } catch(Exception e) {
+      } catch(IOException e) {
         e.printStackTrace();
         throw e;
       }
