@@ -381,4 +381,33 @@ public class JExpressTest {
       );
     }
   }
+
+  @Test
+  public void testUncheckedExceptionAreCorrectlyPropagated() throws IOException, InterruptedException {
+    var app = express();
+    app.get("/hello", (req, res) -> {
+      throw new RuntimeException("oops");
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchGet(port, "/hello");
+      assertEquals(500, response.statusCode());
+    }
+  }
+
+  @Test
+  public void testCheckedExceptionAreCorrectlyPropagated() throws IOException, InterruptedException {
+    var app = express();
+    app.get("/hello", (req, res) -> {
+      //throw new RuntimeException("oops");
+      throw new IOException("oops");
+    });
+
+    var port = nextPort();
+    try(var server = app.listen(port)) {
+      var response = fetchGet(port, "/hello");
+      assertEquals(500, response.statusCode());
+    }
+  }
 }

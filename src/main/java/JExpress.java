@@ -32,7 +32,7 @@ public final class JExpress {
     String get(String header);
 
     /**
-     * Get named route parameter
+     * Get the value of a route parameter
      * @param name name of the parameter
      * @return the value of the parameter or ""
      */
@@ -154,8 +154,7 @@ public final class JExpress {
 
 
   /**
-   * A generic handler called to process an HTTP request in order to
-   * create an HTTP response.
+   * A generic handler called to process an HTTP request to create an HTTP response.
    *
    * @see #use(Handler)
    * @see Callback
@@ -176,9 +175,9 @@ public final class JExpress {
     }
 
     /**
-     * Called to process a HTTP request in order to create a HTTP response.
-     * @param request a HTTP request
-     * @param response a HTTP response
+     * Called to process an HTTP request to create a HTTP response.
+     * @param request an HTTP request
+     * @param response an HTTP response
      * @param chain represents the next handler in the handler chain
      * @throws IOException if an I/O occurs
      */
@@ -186,17 +185,16 @@ public final class JExpress {
   }
 
   /**
-   * A callback called to process an HTTP request in order to
-   * create an HTTP response.
+   * A callback called to process an HTTP request to create an HTTP response.
    * {@link Handler} is a more generic interface which unlike {@link Callback} allows to
    * delegate part of the processing to another handler.
    */
   @FunctionalInterface
   public interface Callback {
     /**
-     * Called to process a HTTP request in order to create a HTTP response.
-     * @param request a HTTP request
-     * @param response a HTTP response
+     * Called to process an HTTP request to create a HTTP response.
+     * @param request an HTTP request
+     * @param response an HTTP response
      * @throws IOException if an I/O occurs
      */
     void accept(Request request, Response response) throws IOException;
@@ -715,9 +713,9 @@ public final class JExpress {
   }
 
   /**
-   * Register a handler that is called when the request path match the defined path
+   * Register a handler called when the request path matches the defined path
    * @param path the defined path that the request path must match
-   * @param handler the handler called if the requested path match
+   * @param handler the handler called if the requested path matches
    */
   public void use(String path, Handler handler) {
     var oldPipeline = pipeline;
@@ -770,8 +768,9 @@ public final class JExpress {
         exchange.setAttribute("status", 200);
         pipeline.accept(new RequestImpl(exchange, components), new ResponseImpl(exchange));
         //exchange.close();
-      } catch(IOException e) {
+      } catch(Exception e) {
         e.printStackTrace();
+        exchange.sendResponseHeaders(500, -1);
         throw e;
       }
     });

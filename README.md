@@ -1,7 +1,6 @@
 # jexpress
 [JExpress.java](src/main/java/JExpress.java), a light and slow [express.js](http://expressjs.com/) clone
 written in Java 25 (in [one file](src/main/java/JExpress.java)).
-It uses virtual threads with its own single-thread scheduled (using Unsafe hence the warnings at start-up).
 
 There is also [JExpress17.java](src/main/java/JExpress8.java), a version backward compatible with Java 17 (supports JSON <-> record mapping).
 There is also [JExpress8.java](src/main/java/JExpress8.java), a version backward compatible with Java 8.
