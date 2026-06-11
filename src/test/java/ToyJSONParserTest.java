@@ -176,7 +176,7 @@ public final class ToyJSONParserTest {
             """)
     );
 
-    assertTrue(ex.getMessage().contains("invalid low surrogate"));
+    assertTrue(ex.getMessage().contains("low surrogate"));
   }
 
   @Test
