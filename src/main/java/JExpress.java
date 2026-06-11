@@ -567,7 +567,13 @@ public final class JExpress {
         case TRUE -> true;
         case FALSE -> false;
         case DOUBLE -> Double.parseDouble(token.text);
-        case INTEGER -> Integer.parseInt(token.text);
+        case INTEGER -> {
+          try {
+            yield Integer.parseInt(token.text);
+          } catch (NumberFormatException _) {
+            yield new BigInteger(token.text);
+          }
+        }
         case STRING -> token.text;
         case LEFT_CURLY -> {
           var object = new LinkedHashMap<String, Object>();
