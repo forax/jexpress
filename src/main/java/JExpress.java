@@ -570,7 +570,7 @@ public final class JExpress {
         case INTEGER -> Integer.parseInt(token.text);
         case STRING -> token.text;
         case LEFT_CURLY -> {
-          var object = new HashMap<String, Object>();
+          var object = new LinkedHashMap<String, Object>();
           parseObject(lexer, object);
           yield object;
         }
