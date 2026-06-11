@@ -10,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -603,7 +604,13 @@ public final class JExpress17 {
         case TRUE -> true;
         case FALSE -> false;
         case DOUBLE -> Double.parseDouble(token.text);
-        case INTEGER -> Integer.parseInt(token.text);
+        case INTEGER -> {
+          try {
+            yield Integer.parseInt(token.text);
+          } catch (NumberFormatException _) {
+            yield new BigInteger(token.text);
+          }
+        }
         case STRING -> token.text;
         case LEFT_CURLY -> {
           var object = new LinkedHashMap<String, Object>();
