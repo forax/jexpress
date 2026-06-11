@@ -10,7 +10,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class ToyJSONParserTest {
+public final class ToyJSONParserTest {
   private static Object asJava(String text) {
     return JExpress.ToyJSONParser.parse(text);
   }
@@ -89,5 +89,81 @@ class ToyJSONParserTest {
     assertEquals(Arrays.asList(13.4, null), asJava("""
         [ 13.4, null ]
         """));
+  }
+
+  @Test
+  public void parseStrings() {
+    assertAll(
+        () -> assertEquals("", asJava("\"\"")),
+        () -> assertEquals("hello", asJava("\"hello\"")),
+        () -> assertEquals(" hello world ", asJava("\" hello world \"")),
+
+        () -> assertEquals("\"", asJava("\"\\\"\"")),
+        () -> assertEquals("\\", asJava("\"\\\\\"")),
+        () -> assertEquals("/", asJava("\"\\/\"")),
+
+        () -> assertEquals("\b", asJava("\"\\b\"")),
+        () -> assertEquals("\f", asJava("\"\\f\"")),
+        () -> assertEquals("\n", asJava("\"\\n\"")),
+        () -> assertEquals("\r", asJava("\"\\r\"")),
+        () -> assertEquals("\t", asJava("\"\\t\"")),
+
+        () -> assertEquals("A", asJava("\"\\u0041\"")),
+        () -> assertEquals("é", asJava("\"\\u00E9\"")),
+        () -> assertEquals("€", asJava("\"\\u20AC\"")),
+
+        () -> assertEquals(
+            "quote=\" backslash=\\ slash=/",
+            asJava("\"quote=\\\" backslash=\\\\ slash=\\/\"")),
+
+        () -> assertEquals(
+            "line1\nline2\tend",
+            asJava("\"line1\\nline2\\tend\""))
+    );
+  }
+
+  @Test
+  public void parseUnicodeSurrogatePairs() {
+    assertEquals(
+        "😀",
+        asJava("""
+            "\\uD83D\\uDE00"
+            """));
+  }
+
+  @Test
+  public void parseObjectsWithEscapedStrings() {
+    assertEquals(
+        Map.of(
+            "message", "hello\nworld",
+            "quote", "\"quoted\"",
+            "unicode", "€"
+        ),
+        asJava("""
+          {
+            "message": "hello\\nworld",
+            "quote": "\\"quoted\\"",
+            "unicode": "\\u20AC"
+          }
+          """));
+  }
+
+  @Test
+  public void parseArraysWithEscapedStrings() {
+    assertEquals(
+        List.of(
+            "a\tb",
+            "\\",
+            "\"",
+            "é"
+        ),
+        asJava("""
+          [
+            "a\\tb",
+            "\\\\",
+            "\\"",
+            "\\u00E9"
+          ]
+          """));
   }
 }

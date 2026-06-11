@@ -413,7 +413,7 @@ public final class JExpress {
       FALSE("(false)"),
       DOUBLE("([0-9]*\\.[0-9]*)"),
       INTEGER("([0-9]+)"),
-      STRING("\"([^\\\"]*)\""),
+      STRING("(\")"),
       LEFT_CURLY("(\\{)"),
       RIGHT_CURLY("(\\})"),
       LEFT_BRACKET("(\\[)"),
@@ -450,42 +450,119 @@ public final class JExpress {
       }
     }
 
-    private record Lexer(Matcher matcher) {
+    private record Lexer(String input, Matcher matcher) {
       private Token next() {
-        for(;;) {
+        for (;;) {
           if (!matcher.find()) {
-            throw new IllegalStateException("no token recognized");
+            throw new IllegalStateException("no token recognized at position " + matcher.regionStart());
           }
           var index = IntStream.rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().orElseThrow();
           var kind = Kind.VALUES[index - 1];
+          if (kind == Kind.STRING) {
+            return scanString(matcher.start(index));
+          }
           if (kind != Kind.BLANK) {
             return new Token(kind, matcher.group(index), matcher.start(index));
           }
         }
+      }
+
+      private static char parseHex(String input, int start) {
+        try {
+          return (char) Integer.parseInt(input, start, start + 4, 16);
+        } catch (NumberFormatException e) {
+          throw new IllegalStateException("invalid \\uXXXX escape '\\u" + input.substring(start, start + 4) + "' at " + start);
+        }
+      }
+
+      private Token scanString(int start) {
+        var builder = new StringBuilder();
+        var i = start + 1;
+        while (i < input.length()) {
+          var ch = input.charAt(i);
+          if (ch == '"') {
+            matcher.region(i + 1, matcher.regionEnd());  // advance pas the closing quote
+            return new Token(Kind.STRING, builder.toString(), start);
+          }
+          if (ch < 0x20) {
+            throw new IllegalStateException(
+                "unescaped control character (0x" + Integer.toHexString(ch) + ") in string at " + i);
+          }
+          if (ch == '\\') {
+            i++;
+            if (i >= input.length()) {
+              throw new IllegalStateException("incomplete escape sequence at " + (i - 1));
+            }
+            var escape = input.charAt(i);
+            switch (escape) {
+              case '"'  -> builder.append('"');
+              case '\\' -> builder.append('\\');
+              case '/'  -> builder.append('/');
+              case 'b'  -> builder.append('\b');
+              case 'f'  -> builder.append('\f');
+              case 'n'  -> builder.append('\n');
+              case 'r'  -> builder.append('\r');
+              case 't'  -> builder.append('\t');
+              case 'u'  -> {
+                if (i + 4 >= input.length()) {
+                  throw new IllegalStateException("incomplete \\uXXXX escape at " + i);
+                }
+                var codeUnit = parseHex(input, i + 1);
+                if (!Character.isHighSurrogate(codeUnit)) {
+                  builder.append(codeUnit);
+                  i += 5;
+                  continue;
+                } else {
+                  var next = i + 5;
+                  if (next + 5 >= input.length()
+                      || input.charAt(next) != '\\'
+                      || input.charAt(next + 1) != 'u') {
+                    throw new IllegalStateException("incomplete low surrogate at " + next);
+                  }
+                  var lowUnit = parseHex(input, next + 2);
+                  if (!Character.isLowSurrogate(lowUnit)) {
+                    throw new IllegalStateException("invalid low surrogate at " + next);
+                  }
+                  builder.appendCodePoint(Character.toCodePoint(codeUnit, lowUnit));
+                  i = next + 6;
+                  continue;
+                }
+              }
+              default -> throw new IllegalStateException("unknown escape sequence '\\" + escape + "' at " + i);
+            }
+          } else {
+            builder.append(ch);
+          }
+          i++;
+        }
+        throw new IllegalStateException("unterminated string starting at " + start);
       }
     }
 
     private static final Pattern PATTERN = Pattern.compile(Arrays.stream(Kind.VALUES)
         .map(k -> k.regex).collect(Collectors.joining("|")));
 
-    /**
-     * Parse a JSON text.
-     *
-     * @param input a JSON text
-     * @return a Java object corresponding to the text
-     */
+    /// Parse a JSON text.
+    ///
+    /// @param input a JSON text
+    /// @return a Java object corresponding to the text
     public static Object parse(String input) {
-      var lexer = new Lexer(PATTERN.matcher(input));
+      var lexer = new Lexer(input, PATTERN.matcher(input));
       try {
-        return parse(lexer);
-      } catch(IllegalStateException e) {
+        return parseToken(lexer.next(), lexer);
+      } catch (IllegalStateException e) {
         throw new IllegalStateException(e.getMessage() + "\n while parsing " + input, e);
       }
     }
 
-    private static Object parse(Lexer lexer) {
-      var token = lexer.next();
-      return switch(token.kind) {
+    private static Object parseToken(Token token, Lexer lexer) {
+      return switch (token.kind) {
+        case NULL -> null;
+        case TRUE -> true;
+        case FALSE -> false;
+        case DOUBLE -> Double.parseDouble(token.text);
+        case INTEGER -> Integer.parseInt(token.text);
+        case STRING -> token.text;
         case LEFT_CURLY -> {
           var object = new HashMap<String, Object>();
           parseObject(lexer, object);
@@ -496,52 +573,9 @@ public final class JExpress {
           parseArray(lexer, array);
           yield array;
         }
-        default -> throw token.error(Kind.LEFT_CURLY, Kind.LEFT_BRACKET);
+        default -> throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE,
+            Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
       };
-    }
-
-    private static void parseObjectValue(Token token, Lexer lexer, Map<String, Object> jsonObject, String key) {
-      switch (token.kind) {
-        case NULL -> jsonObject.put(key, null);
-        case FALSE -> jsonObject.put(key, false);
-        case TRUE -> jsonObject.put(key, true);
-        case INTEGER -> jsonObject.put(key, Integer.parseInt(token.text));
-        case DOUBLE -> jsonObject.put(key, Double.parseDouble(token.text));
-        case STRING -> jsonObject.put(key, token.text);
-        case LEFT_CURLY -> {
-          var map = new HashMap<String, Object>();
-          parseObject(lexer, map);
-          jsonObject.put(key, map);
-        }
-        case LEFT_BRACKET -> {
-          var list = new ArrayList<>();
-          parseArray(lexer, list);
-          jsonObject.put(key, list);
-        }
-        default -> throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
-      }
-    }
-
-    private static void parseArrayValue(Token token, Lexer lexer, List<Object> jsonArray) {
-      switch (token.kind) {
-        case NULL -> jsonArray.add(null);
-        case FALSE -> jsonArray.add(false);
-        case TRUE -> jsonArray.add(true);
-        case INTEGER -> jsonArray.add(Integer.parseInt(token.text));
-        case DOUBLE -> jsonArray.add(Double.parseDouble(token.text));
-        case STRING -> jsonArray.add(token.text);
-        case LEFT_CURLY -> {
-          var map = new HashMap<String, Object>();
-          parseObject(lexer, map);
-          jsonArray.add(map);
-        }
-        case LEFT_BRACKET -> {
-          var list = new ArrayList<>();
-          parseArray(lexer, list);
-          jsonArray.add(list);
-        }
-        default -> throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
-      }
     }
 
     private static void parseObject(Lexer lexer, Map<String, Object> jsonObject) {
@@ -549,11 +583,11 @@ public final class JExpress {
       if (token.is(Kind.RIGHT_CURLY)) {
         return;
       }
-      for(;;) {
+      for (;;) {
         var key = token.expect(Kind.STRING);
         lexer.next().expect(Kind.COLON);
         token = lexer.next();
-        parseObjectValue(token, lexer, jsonObject, key);
+        jsonObject.put(key, parseToken(token, lexer));
         token = lexer.next();
         if (token.is(Kind.RIGHT_CURLY)) {
           return;
@@ -568,8 +602,8 @@ public final class JExpress {
       if (token.is(Kind.RIGHT_BRACKET)) {
         return;
       }
-      for(;;) {
-        parseArrayValue(token, lexer, jsonArray);
+      for (;;) {
+        jsonArray.add(parseToken(token, lexer));
         token = lexer.next();
         if (token.is(Kind.RIGHT_BRACKET)) {
           return;
