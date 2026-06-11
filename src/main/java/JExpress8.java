@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -639,7 +640,7 @@ public final class JExpress8 {
         case INTEGER: return Integer.parseInt(token.text);
         case STRING: return token.text;
         case LEFT_CURLY: {
-          HashMap<String, Object> object = new HashMap<>();
+          LinkedHashMap<String, Object> object = new LinkedHashMap<>();
           parseObject(lexer, object);
           return object;
         }
