@@ -448,8 +448,8 @@ public final class JExpress17 {
       NULL("(null)"),
       TRUE("(true)"),
       FALSE("(false)"),
-      DOUBLE("([0-9]*\\.[0-9]*)"),
-      INTEGER("([0-9]+)"),
+      DOUBLE("(-?(?:0|[1-9]\\d*)(?:(?:\\.\\d+)(?:[eE][+-]?\\d+)?|[eE][+-]?\\d+))"),
+      INTEGER("(-?[0-9]+)"),
       STRING("(\")"),
       LEFT_CURLY("(\\{)"),
       RIGHT_CURLY("(\\})"),
@@ -457,7 +457,7 @@ public final class JExpress17 {
       RIGHT_BRACKET("(\\])"),
       COLON("(\\:)"),
       COMMA("(\\,)"),
-      BLANK("([ \t]+)")
+      BLANK("([ \t\r\n]+)")
       ;
 
       private final String regex;
