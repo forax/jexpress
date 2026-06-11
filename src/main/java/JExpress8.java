@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Spliterators;
 import java.util.function.BiConsumer;
@@ -462,7 +463,7 @@ public final class JExpress8 {
       FALSE("(false)"),
       DOUBLE("([0-9]*\\.[0-9]*)"),
       INTEGER("([0-9]+)"),
-      STRING("\"([^\\\"]*)\""),
+      STRING("(\")"),
       LEFT_CURLY("(\\{)"),
       RIGHT_CURLY("(\\})"),
       LEFT_BRACKET("(\\[)"),
@@ -478,168 +479,177 @@ public final class JExpress8 {
         this.regex = regex;
       }
 
-      private static final Kind[] VALUES = values();
+      static final ToyJSONParser.Kind[] VALUES = values();
     }
 
     private static final class Token {
-      private final Kind kind;
-      private final String text;
-      private final int location;
+      final Kind kind;
+      final String text;
+      final int location;
 
-      private Token(Kind kind, String text, int location) {
+      Token(Kind kind, String text, int location) {
         this.kind = kind;
         this.text = text;
         this.location = location;
       }
 
-      private boolean is(Kind kind) {
-       return this.kind == kind;
-     }
-
-     private String expect(Kind kind) {
-       if (this.kind != kind) {
-         throw error(kind);
-       }
-       return text;
-     }
-
-     public IllegalStateException error(Kind... expectedKinds) {
-       return new IllegalStateException("expect " + Arrays.stream(expectedKinds)
-           .map(Kind::name).collect(Collectors.joining(", ")) + " but recognized " + kind + " at " + location);
-     }
-
-      @Override
-      public String toString() {
-        return "Token[" +
-            "kind=" + kind + ", " +
-            "text=" + text + ", " +
-            "location=" + location + ']';
+      boolean is(Kind kind) {
+        return this.kind == kind;
       }
 
+      private String expect(Kind kind) {
+        if (this.kind != kind) {
+          throw error(kind);
         }
+        return text;
+      }
+
+      public IllegalStateException error(Kind... expectedKinds) {
+        return new IllegalStateException("expect " + Arrays.stream(expectedKinds)
+            .map(Kind::name).collect(Collectors.joining(", ")) + " but recognized " + kind + " at " + location);
+      }
+    }
 
     private static final class Lexer {
+      private final String input;
       private final Matcher matcher;
 
-      private Lexer(Matcher matcher) {
+      Lexer(String input, Matcher matcher) {
+        this.input = input;
         this.matcher = matcher;
       }
 
       private Token next() {
         for (; ; ) {
           if (!matcher.find()) {
-            throw new IllegalStateException("no token recognized");
+            throw new IllegalStateException("no token recognized at position " + matcher.regionStart());
           }
           int index = IntStream.rangeClosed(1, matcher.groupCount()).filter(i -> matcher.group(i) != null).findFirst().getAsInt();
           Kind kind = Kind.VALUES[index - 1];
+          if (kind == Kind.STRING) {
+            return scanString(matcher.start(index));
+          }
           if (kind != Kind.BLANK) {
             return new Token(kind, matcher.group(index), matcher.start(index));
           }
         }
+      }
+
+      private static char parseHex(String input, int start) {
+        String hexText = input.substring(start, start + 4);
+        try {
+          return (char) Integer.parseInt(hexText, 16);
+        } catch (NumberFormatException e) {
+          throw new IllegalStateException("invalid \\uXXXX escape '\\u" + hexText + "' at " + start);
+        }
+      }
+
+      private static int parseStringEscape(String input, int i, StringBuilder builder) {
+        i++;
+        if (i >= input.length()) {
+          throw new IllegalStateException("incomplete escape sequence at " + (i - 1));
+        }
+        char escape = input.charAt(i);
+        switch (escape) {
+          case '"': builder.append('"'); break;
+          case '\\': builder.append('\\'); break;
+          case '/': builder.append('/'); break;
+          case 'b': builder.append('\b'); break;
+          case 'f': builder.append('\f'); break;
+          case 'n': builder.append('\n'); break;
+          case 'r': builder.append('\r'); break;
+          case 't': builder.append('\t'); break;
+          case 'u': {
+            if (i + 4 >= input.length()) {
+              throw new IllegalStateException("incomplete \\uXXXX escape at " + i);
+            }
+            char codeUnit = parseHex(input, i + 1);
+            if (!Character.isHighSurrogate(codeUnit)) {
+              if (Character.isLowSurrogate(codeUnit)) {
+                throw new IllegalStateException("unexpected low surrogate at " + i);
+              }
+              builder.append(codeUnit);
+              return i + 5;
+            } else {
+              int next = i + 5;
+              if (next + 5 >= input.length()
+                  || input.charAt(next) != '\\'
+                  || input.charAt(next + 1) != 'u') {
+                throw new IllegalStateException("incomplete low surrogate at " + next);
+              }
+              char lowUnit = parseHex(input, next + 2);
+              if (!Character.isLowSurrogate(lowUnit)) {
+                throw new IllegalStateException("invalid low surrogate at " + next);
+              }
+              builder.appendCodePoint(Character.toCodePoint(codeUnit, lowUnit));
+              return next + 6;
+            }
+          }
+          default: throw new IllegalStateException("unknown escape sequence '\\" + escape + "' at " + i);
+        }
+        return i + 1;
+      }
+
+      private Token scanString(int start) {
+        StringBuilder builder = new StringBuilder();
+        int i = start + 1;
+        while (i < input.length()) {
+          char ch = input.charAt(i);
+          if (ch == '"') {
+            matcher.region(i + 1, matcher.regionEnd());  // advance pas the closing quote
+            return new Token(Kind.STRING, builder.toString(), start);
+          }
+          if (ch < 0x20) {
+            throw new IllegalStateException(
+                "unescaped control character (0x" + Integer.toHexString(ch) + ") in string at " + i);
+          }
+          if (ch == '\\') {
+            i = parseStringEscape(input, i, builder);
+            continue;
+          }
+          builder.append(ch);
+          i++;
+        }
+        throw new IllegalStateException("unterminated string starting at " + start);
       }
     }
 
     private static final Pattern PATTERN = Pattern.compile(Arrays.stream(Kind.VALUES)
         .map(k -> k.regex).collect(Collectors.joining("|")));
 
-    /**
-     * Parse a JSON text.
-     *
-     * @param input a JSON text
-     * @return a Java object corresponding to the text
-     */
+    /// Parse a JSON text.
+    ///
+    /// @param input a JSON text
+    /// @return a Java object corresponding to the text
     public static Object parse(String input) {
-      Lexer lexer = new Lexer(PATTERN.matcher(input));
+      Lexer lexer = new Lexer(input, PATTERN.matcher(input));
       try {
-        return parse(lexer);
-      } catch(IllegalStateException e) {
+        return parseToken(lexer.next(), lexer);
+      } catch (IllegalStateException e) {
         throw new IllegalStateException(e.getMessage() + "\n while parsing " + input, e);
       }
     }
 
-    private static Object parse(Lexer lexer) {
-      Token token = lexer.next();
+    private static Object parseToken(ToyJSONParser.Token token, Lexer lexer) {
       switch (token.kind) {
-        case LEFT_CURLY:
-          HashMap<String, Object> object = new HashMap<String, Object>();
+        case NULL: return null;
+        case TRUE: return true;
+        case FALSE: return false;
+        case DOUBLE: return Double.parseDouble(token.text);
+        case INTEGER: return Integer.parseInt(token.text);
+        case STRING: return token.text;
+        case LEFT_CURLY: {
+          HashMap<String, Object> object = new HashMap<>();
           parseObject(lexer, object);
           return object;
-        case LEFT_BRACKET:
+        }
+        case LEFT_BRACKET: {
           ArrayList<Object> array = new ArrayList<>();
           parseArray(lexer, array);
           return array;
-        default:
-          throw token.error(Kind.LEFT_CURLY, Kind.LEFT_BRACKET);
-      }
-    }
-
-    private static void parseObjectValue(Token token, Lexer lexer, Map<String, Object> jsonObject, String key) {
-      switch (token.kind) {
-        case NULL:
-          jsonObject.put(key, null);
-          break;
-        case FALSE:
-          jsonObject.put(key, false);
-          break;
-        case TRUE:
-          jsonObject.put(key, true);
-          break;
-        case INTEGER:
-          jsonObject.put(key, Integer.parseInt(token.text));
-          break;
-        case DOUBLE:
-          jsonObject.put(key, Double.parseDouble(token.text));
-          break;
-        case STRING:
-          jsonObject.put(key, token.text);
-          break;
-        case LEFT_CURLY:
-          HashMap<String, Object> map = new HashMap<String, Object>();
-          parseObject(lexer, map);
-          jsonObject.put(key, map);
-          break;
-        case LEFT_BRACKET:
-          ArrayList<Object> list = new ArrayList<Object>();
-          parseArray(lexer, list);
-          jsonObject.put(key, list);
-          break;
-        default:
-          throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
-      }
-    }
-
-    private static void parseArrayValue(Token token, Lexer lexer, List<Object> jsonArray) {
-      switch (token.kind) {
-        case NULL:
-          jsonArray.add(null);
-          break;
-        case FALSE:
-          jsonArray.add(false);
-          break;
-        case TRUE:
-          jsonArray.add(true);
-          break;
-        case INTEGER:
-          jsonArray.add(Integer.parseInt(token.text));
-          break;
-        case DOUBLE:
-          jsonArray.add(Double.parseDouble(token.text));
-          break;
-        case STRING:
-          jsonArray.add(token.text);
-          break;
-        case LEFT_CURLY:
-          HashMap<String, Object> map = new HashMap<String, Object>();
-          parseObject(lexer, map);
-          jsonArray.add(map);
-          break;
-        case LEFT_BRACKET:
-          ArrayList<Object> list = new ArrayList<>();
-          parseArray(lexer, list);
-          jsonArray.add(list);
-          break;
-        default:
-          throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE, Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
+        }
+        default: throw token.error(Kind.NULL, Kind.FALSE, Kind.TRUE, Kind.INTEGER, Kind.DOUBLE,
+            Kind.STRING, Kind.LEFT_BRACKET, Kind.RIGHT_CURLY);
       }
     }
 
@@ -648,11 +658,11 @@ public final class JExpress8 {
       if (token.is(Kind.RIGHT_CURLY)) {
         return;
       }
-      for(;;) {
+      for (;;) {
         String key = token.expect(Kind.STRING);
         lexer.next().expect(Kind.COLON);
         token = lexer.next();
-        parseObjectValue(token, lexer, jsonObject, key);
+        jsonObject.put(key, parseToken(token, lexer));
         token = lexer.next();
         if (token.is(Kind.RIGHT_CURLY)) {
           return;
@@ -667,8 +677,8 @@ public final class JExpress8 {
       if (token.is(Kind.RIGHT_BRACKET)) {
         return;
       }
-      for(;;) {
-        parseArrayValue(token, lexer, jsonArray);
+      for (;;) {
+        jsonArray.add(parseToken(token, lexer));
         token = lexer.next();
         if (token.is(Kind.RIGHT_BRACKET)) {
           return;
@@ -837,7 +847,7 @@ public final class JExpress8 {
    * @return the server instance
    * @throws UncheckedIOException if an I/O error occurs when creating the server.
    */
-  public JExpress.Server listen(int port) {
+  public Server listen(int port) {
     HttpServer server;
     try {
       server = HttpServer.create(new InetSocketAddress(port), 0);

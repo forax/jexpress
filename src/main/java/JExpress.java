@@ -475,6 +475,52 @@ public final class JExpress {
         }
       }
 
+      private static int parseStringEscape(String input, int i, StringBuilder builder) {
+        i++;
+        if (i >= input.length()) {
+          throw new IllegalStateException("incomplete escape sequence at " + (i - 1));
+        }
+        var escape = input.charAt(i);
+        switch (escape) {
+          case '"'  -> builder.append('"');
+          case '\\' -> builder.append('\\');
+          case '/'  -> builder.append('/');
+          case 'b'  -> builder.append('\b');
+          case 'f'  -> builder.append('\f');
+          case 'n'  -> builder.append('\n');
+          case 'r'  -> builder.append('\r');
+          case 't'  -> builder.append('\t');
+          case 'u'  -> {
+            if (i + 4 >= input.length()) {
+              throw new IllegalStateException("incomplete \\uXXXX escape at " + i);
+            }
+            var codeUnit = parseHex(input, i + 1);
+            if (!Character.isHighSurrogate(codeUnit)) {
+              if (Character.isLowSurrogate(codeUnit)) {
+                throw new IllegalStateException("unexpected low surrogate at " + i);
+              }
+              builder.append(codeUnit);
+              return i + 5;
+            } else {
+              var next = i + 5;
+              if (next + 5 >= input.length()
+                  || input.charAt(next) != '\\'
+                  || input.charAt(next + 1) != 'u') {
+                throw new IllegalStateException("incomplete low surrogate at " + next);
+              }
+              var lowUnit = parseHex(input, next + 2);
+              if (!Character.isLowSurrogate(lowUnit)) {
+                throw new IllegalStateException("invalid low surrogate at " + next);
+              }
+              builder.appendCodePoint(Character.toCodePoint(codeUnit, lowUnit));
+              return next + 6;
+            }
+          }
+          default -> throw new IllegalStateException("unknown escape sequence '\\" + escape + "' at " + i);
+        }
+        return i + 1;
+      }
+
       private Token scanString(int start) {
         var builder = new StringBuilder();
         var i = start + 1;
@@ -489,50 +535,10 @@ public final class JExpress {
                 "unescaped control character (0x" + Integer.toHexString(ch) + ") in string at " + i);
           }
           if (ch == '\\') {
-            i++;
-            if (i >= input.length()) {
-              throw new IllegalStateException("incomplete escape sequence at " + (i - 1));
-            }
-            var escape = input.charAt(i);
-            switch (escape) {
-              case '"'  -> builder.append('"');
-              case '\\' -> builder.append('\\');
-              case '/'  -> builder.append('/');
-              case 'b'  -> builder.append('\b');
-              case 'f'  -> builder.append('\f');
-              case 'n'  -> builder.append('\n');
-              case 'r'  -> builder.append('\r');
-              case 't'  -> builder.append('\t');
-              case 'u'  -> {
-                if (i + 4 >= input.length()) {
-                  throw new IllegalStateException("incomplete \\uXXXX escape at " + i);
-                }
-                var codeUnit = parseHex(input, i + 1);
-                if (!Character.isHighSurrogate(codeUnit)) {
-                  builder.append(codeUnit);
-                  i += 5;
-                  continue;
-                } else {
-                  var next = i + 5;
-                  if (next + 5 >= input.length()
-                      || input.charAt(next) != '\\'
-                      || input.charAt(next + 1) != 'u') {
-                    throw new IllegalStateException("incomplete low surrogate at " + next);
-                  }
-                  var lowUnit = parseHex(input, next + 2);
-                  if (!Character.isLowSurrogate(lowUnit)) {
-                    throw new IllegalStateException("invalid low surrogate at " + next);
-                  }
-                  builder.appendCodePoint(Character.toCodePoint(codeUnit, lowUnit));
-                  i = next + 6;
-                  continue;
-                }
-              }
-              default -> throw new IllegalStateException("unknown escape sequence '\\" + escape + "' at " + i);
-            }
-          } else {
-            builder.append(ch);
+            i = parseStringEscape(input, i, builder);
+            continue;
           }
+          builder.append(ch);
           i++;
         }
         throw new IllegalStateException("unterminated string starting at " + start);

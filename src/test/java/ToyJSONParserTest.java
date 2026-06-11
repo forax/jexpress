@@ -1,7 +1,5 @@
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -9,6 +7,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class ToyJSONParserTest {
   private static Object asJava(String text) {
@@ -129,6 +129,100 @@ public final class ToyJSONParserTest {
         asJava("""
             "\\uD83D\\uDE00"
             """));
+  }
+
+  @Test
+  public void rejectsHighSurrogateWithoutLowSurrogate() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "\\uD83D"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("low surrogate"));
+  }
+
+  @Test
+  public void rejectsHighSurrogateFollowedByNonUnicodeEscape() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "\\uD83D\\n"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("low surrogate"));
+  }
+
+  @Test
+  public void rejectsHighSurrogateFollowedByRegularCharacter() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "\\uD83Dx"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("low surrogate"));
+  }
+
+  @Test
+  public void rejectsHighSurrogateFollowedByAnotherHighSurrogate() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "\\uD83D\\uD83D"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("invalid low surrogate"));
+  }
+
+  @Test
+  public void rejectsLoneLowSurrogate() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "\\uDE00"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("low surrogate"));
+  }
+
+  @Test
+  public void rejectsLowSurrogateAfterRegularCharacter() {
+    var ex = assertThrows(
+        IllegalStateException.class,
+        () -> asJava("""
+            "abc\\uDE00"
+            """)
+    );
+
+    assertTrue(ex.getMessage().contains("low surrogate"));
+  }
+
+  @Test
+  public void acceptsMultipleSurrogatePairs() {
+    var value = asJava(
+        """
+            "\\uD83D\\uDE00\\uD83D\\uDE03"
+            """
+    );
+
+    assertEquals("😀😃", value);
+  }
+
+  @Test
+  public void acceptsMixedTextAndSurrogatePairs() {
+    var value = asJava(
+        """
+            "hello \\uD83D\\uDE00 world"
+            """
+    );
+
+    assertEquals("hello 😀 world", value);
   }
 
   @Test
